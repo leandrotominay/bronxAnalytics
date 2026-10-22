@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; style-src 'self'; script-src 'self'"
+    />
+    <link rel="stylesheet" href="/src/style.css" />
+    <title>League Event Companion</title>
+  </head>
+  <body>
+    <main class="app">
+      <div class="controls">
+        <button id="start-button" type="button" disabled>Start</button>
+        <button id="stop-button" type="button" disabled>Stop</button>
+      </div>
+      <p id="status" class="capture-status" role="status">Procurando o jogo...</p>
+      <canvas id="screen-canvas" aria-hidden="true"></canvas>
+      <ol id="event-list" class="event-list" aria-live="polite">
+        <li class="empty-state">Alertas aparecerão aqui.</li>
+      </ol>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

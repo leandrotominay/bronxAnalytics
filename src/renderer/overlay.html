@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; style-src 'self'; script-src 'self'"
+    />
+    <link rel="stylesheet" href="/src/overlay.css" />
+    <title>Alertas da partida</title>
+  </head>
+  <body>
+    <main class="overlay" aria-live="assertive" aria-atomic="true">
+      <div id="overlay-alert" class="overlay-alert"></div>
+    </main>
+    <script type="module" src="/src/overlay.ts"></script>
+  </body>
+</html>

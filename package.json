@@ -1,0 +1,24 @@
+{
+  "name": "league-event-companion",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.30",
+    "electron": "^45.0.0",
+    "electron-vite": "^4.0.0",
+    "typescript": "^5.8.3",
+    "vite": "^6.3.5"
+  },
+  "dependencies": {
+    "@tesseract.js-data/eng": "^1.0.0",
+    "tesseract.js": "^7.0.0"
+  }
+}

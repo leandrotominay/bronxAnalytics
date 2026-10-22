@@ -1,0 +1,53 @@
+:root {
+  color-scheme: dark;
+  font-family: Inter, "Segoe UI", sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: transparent;
+}
+
+.overlay {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+  width: 100%;
+  height: 100%;
+  padding: 7vh 2vw;
+  pointer-events: none;
+}
+
+.overlay-alert {
+  max-width: min(520px, 45vw);
+  padding: 16px 20px;
+  border: 1px solid rgb(200 155 60 / 70%);
+  border-left: 5px solid #c89b3c;
+  border-radius: 8px;
+  background: rgb(16 19 27 / 92%);
+  box-shadow: 0 8px 28px rgb(0 0 0 / 45%);
+  color: #fff;
+  font-size: clamp(18px, 1.55vw, 28px);
+  font-weight: 700;
+  line-height: 1.35;
+  opacity: 0;
+  transform: translateX(-12px);
+  transition:
+    opacity 160ms ease-out,
+    transform 160ms ease-out;
+}
+
+.overlay-alert.is-visible {
+  opacity: 1;
+  transform: translateX(0);
+}
