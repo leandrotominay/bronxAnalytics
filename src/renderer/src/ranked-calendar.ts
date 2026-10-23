@@ -408,6 +408,8 @@ export function initializeRankedCalendar(): void {
   const homePage = requireElement<HTMLElement>('#home-page')
   const matchPage = requireElement<HTMLElement>('#match-page')
   const calendarPage = requireElement<HTMLElement>('#calendar-page')
+  const voicePage = requireElement<HTMLElement>('#voice-page')
+  const voiceSettingsButton = requireElement<HTMLButtonElement>('#voice-settings-button')
   const navigation = requireElement<HTMLElement>('.sidebar-navigation')
   const status = requireElement<HTMLElement>('#calendar-status')
   const previousMonth = requireElement<HTMLButtonElement>('#calendar-previous-month')
@@ -1234,17 +1236,25 @@ export function initializeRankedCalendar(): void {
   })
 
   function navigateToPage(selectedPage: string | undefined): void {
-    if (selectedPage !== 'home' && selectedPage !== 'match' && selectedPage !== 'calendar') return
+    if (
+      selectedPage !== 'home' &&
+      selectedPage !== 'match' &&
+      selectedPage !== 'calendar' &&
+      selectedPage !== 'voice'
+    ) return
     const showHome = selectedPage === 'home'
     const showCalendar = selectedPage === 'calendar'
     homePage.hidden = !showHome
     matchPage.hidden = selectedPage !== 'match'
     calendarPage.hidden = !showCalendar
+    voicePage.hidden = selectedPage !== 'voice'
     pageTitle.textContent = showHome
       ? 'Bem-vindo ao Bronx I.A.'
       : showCalendar
-        ? 'Calendário ranqueado'
-        : 'Jungler Tracker'
+        ? 'Perfil'
+        : selectedPage === 'voice'
+          ? 'Voz dos alertas'
+          : 'Jungler Tracker'
     const workspace = document.querySelector('.workspace')
     if (workspace) {
         workspace.classList.remove('page-flare')
@@ -1256,6 +1266,8 @@ export function initializeRankedCalendar(): void {
       if (button.dataset.pageTarget === selectedPage) button.setAttribute('aria-current', 'page')
       else button.removeAttribute('aria-current')
     }
+    if (selectedPage === 'voice') voiceSettingsButton.setAttribute('aria-current', 'page')
+    else voiceSettingsButton.removeAttribute('aria-current')
     if (showCalendar) render()
   }
 
@@ -1265,6 +1277,8 @@ export function initializeRankedCalendar(): void {
     const pageButton = target.closest<HTMLButtonElement>('[data-page-target]')
     if (pageButton) navigateToPage(pageButton.dataset.pageTarget)
   })
+
+  voiceSettingsButton.addEventListener('click', () => navigateToPage('voice'))
 
   homePage.addEventListener('click', (event) => {
     const target = event.target

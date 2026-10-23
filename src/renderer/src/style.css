@@ -1026,19 +1026,6 @@ button.home-feature-card:hover {
   max-width: 210px;
 }
 
-.developer-mode-button {
-  min-height: 34px;
-  border-color: #39363d;
-  color: #b8b4bd;
-  font-size: 10px;
-}
-
-.developer-mode-button[aria-pressed="true"] {
-  border-color: #a65c3e;
-  background: #302117;
-  color: #ffc184;
-}
-
 .voice-settings-button {
   min-height: 34px;
   border-color: #39363d;
@@ -1046,7 +1033,7 @@ button.home-feature-card:hover {
   font-size: 10px;
 }
 
-.voice-settings-button[aria-expanded="true"] {
+.voice-settings-button[aria-current="page"] {
   border-color: #a65c3e;
   background: #302117;
   color: #ffc184;
@@ -2858,5 +2845,148 @@ button.home-feature-card:hover {
 
   .workspace.page-flare::after {
     animation: none;
+  }
+}
+
+.sidebar-link {
+  font-size: 14px;
+}
+
+.sidebar-feature-label {
+  font-size: 12px;
+}
+
+.sidebar-feature-label small,
+.sidebar-caption,
+.eyebrow {
+  font-size: 10px;
+}
+
+.home-description {
+  font-size: 16px;
+}
+
+.home-tracker-status strong {
+  font-size: 11px;
+}
+
+.home-tracker-status small,
+.radar-target-label {
+  font-size: 10px;
+}
+
+.radar-coordinate {
+  font-size: 9px;
+}
+
+.home-feature-card {
+  min-height: 136px;
+  gap: 15px;
+  padding: 19px;
+}
+
+.home-feature-copy strong {
+  font-size: 16px;
+}
+
+.home-feature-copy small {
+  font-size: 12px;
+}
+
+.home-feature-index,
+.home-feature-soon,
+.home-hero-index {
+  font-size: 10px;
+}
+
+.voice-settings-heading h2 {
+  font-size: 22px;
+}
+
+.voice-settings-heading p,
+.voice-select-label,
+.voice-range-label,
+.voice-settings-status {
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.voice-select-label select {
+  font-size: 13px;
+}
+
+.voice-settings-button {
+  font-size: 12px;
+}
+
+.match-rank-value > span,
+.calendar-profile-summary > span:not(.eyebrow):not(.rank-value-display),
+.calendar-profile-form label,
+.calendar-pdl-settings label,
+.calendar-period-filter,
+.calendar-summary span,
+.calendar-match-main span,
+.calendar-match-main p,
+.calendar-empty-day {
+  font-size: 12px;
+}
+
+.calendar-profile-summary p,
+.calendar-profile-warning,
+.calendar-status,
+.calendar-heading p {
+  font-size: 13px;
+}
+
+.calendar-profile-form input,
+.calendar-profile-form select,
+.calendar-pdl-settings input {
+  font-size: 13px;
+}
+
+.calendar-profile-form button,
+.calendar-pdl-settings button,
+.calendar-match-actions button {
+  font-size: 12px;
+}
+
+.calendar-summary strong {
+  font-size: 20px;
+}
+
+.calendar-day-results span {
+  font-size: 9px;
+}
+
+.calendar-day-pdl {
+  font-size: 10px;
+}
+
+.calendar-match-kda-ratio {
+  font-size: 12px !important;
+}
+
+.calendar-match-stat span {
+  font-size: 10px !important;
+}
+
+.calendar-match-stat strong {
+  font-size: 16px;
+}
+
+.jungler-details strong,
+.capture-status,
+.match-toolbar p {
+  font-size: 14px;
+}
+
+.live-tag,
+.text-button {
+  font-size: 12px;
+}
+
+@media (max-height: 700px) {
+  .home-feature-card {
+    min-height: 112px;
   }
 }

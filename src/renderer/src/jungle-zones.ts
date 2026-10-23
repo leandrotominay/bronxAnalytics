@@ -22,7 +22,7 @@ export function classifyJungleZone(point: Point): JungleZone | null {
   if (point.x < 0 || point.x > 1 || point.y < 0 || point.y > 1) return null
 
   if (Math.hypot(point.x - 0.3, point.y - 0.16) <= 0.035) return 'baron-pit'
-  if (Math.hypot(point.x - 0.8, point.y - 0.8) <= 0.045) return 'dragon-pit'
+  if (Math.hypot(point.x - 0.8, point.y - 0.8) <= 0.025) return 'dragon-pit'
 
   const campAnchors: Array<{
     name: JungleCamp
@@ -51,7 +51,7 @@ export function classifyJungleZone(point: Point): JungleZone | null {
       }
     }
   }
-  if (nearestCamp && nearestCampDistance <= 0.045) {
+  if (nearestCamp && nearestCampDistance <= 0.06) {
     return `camp:${nearestCamp.side}:${nearestCamp.name}`
   }
 

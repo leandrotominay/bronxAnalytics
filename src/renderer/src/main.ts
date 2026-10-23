@@ -69,10 +69,7 @@ const resetCalibrationButton = document.querySelector<HTMLButtonElement>(
 const calibrationFeedback = document.querySelector<HTMLElement>('#calibration-feedback')
 const calibrationResolution = document.querySelector<HTMLElement>('#calibration-resolution')
 const diagnosticModeButton = document.querySelector<HTMLButtonElement>('#diagnostic-mode-button')
-const developerModeButton = document.querySelector<HTMLButtonElement>('#developer-mode-button')
 const developerTools = document.querySelector<HTMLElement>('#developer-tools')
-const voiceSettingsButton = document.querySelector<HTMLButtonElement>('#voice-settings-button')
-const voiceSettingsPanel = document.querySelector<HTMLElement>('#voice-settings')
 const alertVoiceSelect = document.querySelector<HTMLSelectElement>('#alert-voice-select')
 const alertVoiceRate = document.querySelector<HTMLInputElement>('#alert-voice-rate')
 const alertVoicePitch = document.querySelector<HTMLInputElement>('#alert-voice-pitch')
@@ -112,10 +109,7 @@ if (
   !calibrationFeedback ||
   !calibrationResolution ||
   !diagnosticModeButton ||
-  !developerModeButton ||
   !developerTools ||
-  !voiceSettingsButton ||
-  !voiceSettingsPanel ||
   !alertVoiceSelect ||
   !alertVoiceRate ||
   !alertVoicePitch ||
@@ -148,10 +142,6 @@ const calibrationSizeControl = calibrationSizeInput
 const calibrationFeedbackElement = calibrationFeedback
 const calibrationResolutionElement = calibrationResolution
 const diagnosticModeControl = diagnosticModeButton
-const developerModeControl = developerModeButton
-const developerToolsPanel = developerTools
-const voiceSettingsToggle = voiceSettingsButton
-const voiceSettings = voiceSettingsPanel
 const alertVoiceControl = alertVoiceSelect
 const alertVoiceRateControl = alertVoiceRate
 const alertVoicePitchControl = alertVoicePitch
@@ -273,27 +263,27 @@ type JunglerTarget = {
   portrait: ImageData
   portraitUrl: string
 }
-const jungleScanInterval = 1000
-const jungleMatchConfirmationScans = 3
-const jungleMatchPositionTolerance = 0.045
+const jungleScanInterval = 125
+const jungleMatchConfirmationScans = 2
+const jungleMatchPositionTolerance = 0.08
+const jungleMatchInstantScore = 0.1
+const jungleMatchInstantRingSamples = 9
+const jungleMatchInstantMargin = 0.03
+const jungleZoneChangeConfirmationMs = 1_250
+const jungleZoneAnnouncementCooldownMs = 5_000
 const liveClientPollInterval = 2500
 const voidGrubAlertTime = 7 * 60
 const voidGrubSpawnTime = 8 * 60
-const minimapRingSamplePoints = [
-  [0.5, 0.08],
-  [0.92, 0.5],
-  [0.5, 0.92],
-  [0.08, 0.5],
-  [0.2, 0.2],
-  [0.8, 0.2],
-  [0.2, 0.8],
-  [0.8, 0.8]
-]
+const minimapRingSamplePoints = Array.from({ length: 16 }, (_, index) => {
+  const angle = (index * 2 * Math.PI) / 16
+  return [0.5 + Math.cos(angle) * 0.46, 0.5 + Math.sin(angle) * 0.46]
+})
 const jungleMatchMaximumScore = 0.17
 const jungleMatchMinimumMargin = 0.015
-const jungleMatchMinimumRingSamples = 3
+const jungleMatchMinimumRingSamples = 5
 const minimapCropStorageKey = 'league-event-companion.minimap-crops.v1'
-const alertVoiceStorageKey = 'bronx-analytics.alert-voice.v1'
+const alertVoiceStorageKey = 'bronx-analytics.alert-voice.v2'
+const legacyAlertVoiceStorageKey = 'bronx-analytics.alert-voice.v1'
 let stream: MediaStream | null = null
 let video: HTMLVideoElement | null = null
 let timer: number | null = null
@@ -324,6 +314,9 @@ let pendingJungleZone: JungleZone | null = null
 let pendingJunglePoint: Point | null = null
 let pendingJungleZoneScans = 0
 let announcedJungleZone: JungleZone | null = null
+let jungleZoneAlertCandidate: JungleZone | null = null
+let jungleZoneAlertCandidateSince = 0
+let lastJungleZoneAnnouncementAt = 0
 let lastConfirmedJungleZone: JungleZone | null = null
 let lastConfirmedJungleMarker: OverlayMarker | null = null
 let jungleDisappearanceAnnounced = false
@@ -339,7 +332,7 @@ let minimapCrop = defaultMinimapCrop()
 let diagnosticMode = false
 let alertVoiceStorageWarning: string | null = null
 let alertVoicePreferences: AlertVoicePreferences = {
-  voiceURI: 'piper:pt_BR-faber-medium',
+  voiceURI: 'piper:pt_BR-jeff-medium',
   rate: 1,
   pitch: 1
 }
@@ -364,7 +357,11 @@ let lastJungleScanDiagnostics: MinimapScanDiagnostics = {
 
 function loadAlertVoicePreferences(): void {
   try {
-    const saved = window.localStorage.getItem(alertVoiceStorageKey)
+    const savedPreferences = window.localStorage.getItem(alertVoiceStorageKey)
+    const legacyPreferences = savedPreferences
+      ? null
+      : window.localStorage.getItem(legacyAlertVoiceStorageKey)
+    const saved = savedPreferences ?? legacyPreferences
     if (!saved) return
     const parsed: unknown = JSON.parse(saved)
     if (
@@ -382,9 +379,14 @@ function loadAlertVoicePreferences(): void {
       throw new Error('As preferências salvas de voz têm um formato inválido.')
     }
     alertVoicePreferences = {
-      voiceURI: parsed.voiceURI,
+      voiceURI: legacyPreferences
+        ? 'piper:pt_BR-jeff-medium'
+        : parsed.voiceURI,
       rate: Math.min(1.25, Math.max(0.75, parsed.rate)),
       pitch: Math.min(1.3, Math.max(0.7, parsed.pitch))
+    }
+    if (legacyPreferences) {
+      window.localStorage.setItem(alertVoiceStorageKey, JSON.stringify(alertVoicePreferences))
     }
   } catch (error) {
     console.error('Could not load alert voice preferences.', error)
@@ -650,13 +652,6 @@ function configureAlertVoice(): void {
 
 configureAlertVoice()
 
-voiceSettingsToggle.addEventListener('click', () => {
-  const expanded = voiceSettingsToggle.getAttribute('aria-expanded') === 'true'
-  voiceSettingsToggle.setAttribute('aria-expanded', String(!expanded))
-  voiceSettings.hidden = expanded
-  if (!expanded) refreshAlertVoices()
-})
-
 alertVoiceControl.addEventListener('change', () => {
   const previousVoiceId = piperVoiceFromURI(alertVoicePreferences.voiceURI)
   alertVoicePreferences.voiceURI = alertVoiceControl.value
@@ -800,21 +795,10 @@ function setDiagnosticMode(enabled: boolean): void {
   }
 }
 
-function setDeveloperMode(enabled: boolean): void {
-  developerToolsPanel.hidden = !enabled
-  developerModeControl.setAttribute('aria-pressed', String(enabled))
-  document.body.classList.toggle('developer-mode', enabled)
-}
-
 setDiagnosticMode(false)
-setDeveloperMode(false)
 
 diagnosticModeControl.addEventListener('click', () => {
   setDiagnosticMode(!diagnosticMode)
-})
-
-developerModeControl.addEventListener('click', () => {
-  setDeveloperMode(developerToolsPanel.hidden)
 })
 
 function resetMatchEvents(): void {
@@ -830,6 +814,9 @@ function resetMatchEvents(): void {
   pendingJunglePoint = null
   pendingJungleZoneScans = 0
   announcedJungleZone = null
+  jungleZoneAlertCandidate = null
+  jungleZoneAlertCandidateSince = 0
+  lastJungleZoneAnnouncementAt = 0
   lastConfirmedJungleZone = null
   lastConfirmedJungleMarker = null
   jungleDisappearanceAnnounced = false
@@ -1009,6 +996,9 @@ function resetJunglerTracking(): void {
   pendingJunglePoint = null
   pendingJungleZoneScans = 0
   announcedJungleZone = null
+  jungleZoneAlertCandidate = null
+  jungleZoneAlertCandidateSince = 0
+  lastJungleZoneAnnouncementAt = 0
   lastConfirmedJungleZone = null
   lastConfirmedJungleMarker = null
   jungleDisappearanceAnnounced = false
@@ -1074,7 +1064,13 @@ function findPortraitOnMinimap(template: ImageData): MinimapScanDiagnostics {
   const minIconSize = Math.max(8, Math.round(Math.min(width, height) * 0.04))
   const maxIconSize = Math.max(minIconSize, Math.round(Math.min(width, height) * 0.1))
   const iconSizeStep = Math.max(1, Math.round(Math.min(width, height) * 0.008))
-  const candidates: Array<{ score: number; x: number; y: number; size: number }> = []
+  const candidates: Array<{
+    score: number
+    redRingSamples: number
+    x: number
+    y: number
+    size: number
+  }> = []
   let maxObservedRingSamples = 0
   for (let size = minIconSize; size <= maxIconSize; size += iconSizeStep) {
     for (let top = 0; top <= height - size; top += 2) {
@@ -1111,14 +1107,14 @@ function findPortraitOnMinimap(template: ImageData): MinimapScanDiagnostics {
             765
         }
         const score = error / samplePoints.length
-        candidates.push({ score, x: left, y: top, size })
+        candidates.push({ score, redRingSamples, x: left, y: top, size })
       }
     }
   }
 
   candidates.sort((first, second) => first.score - second.score)
   const best = candidates[0]
-  result.redRingSamples = maxObservedRingSamples
+  result.redRingSamples = best?.redRingSamples ?? maxObservedRingSamples
   if (!best) return result
 
   const secondDistinctCandidate = candidates.find((candidate) => {
@@ -1357,7 +1353,8 @@ async function inspectJungler(): Promise<void> {
       pendingJunglePoint = null
       pendingJungleZoneScans = 0
       if (jungleMissedScans >= 2) {
-        announcedJungleZone = null
+        jungleZoneAlertCandidate = null
+        jungleZoneAlertCandidateSince = 0
         if (lastConfirmedJungleZone && lastConfirmedJungleMarker) {
           const lastObservedArea = formatJungleZone(
             lastConfirmedJungleZone,
@@ -1393,7 +1390,16 @@ async function inspectJungler(): Promise<void> {
       pendingJunglePoint = match.point
       pendingJungleZoneScans = 1
     }
-    if (pendingJungleZoneScans < jungleMatchConfirmationScans) return
+    const isInstantConfirmation =
+      match.bestScore !== null &&
+      match.bestScore <= jungleMatchInstantScore &&
+      match.redRingSamples >= jungleMatchInstantRingSamples &&
+      (match.runnerUpScore === null ||
+        match.runnerUpScore - match.bestScore >= jungleMatchInstantMargin)
+    if (
+      pendingJungleZoneScans < jungleMatchConfirmationScans &&
+      !isInstantConfirmation
+    ) return
 
     if (jungleDisappearanceAnnounced) {
       jungleDisappearanceAnnounced = false
@@ -1405,9 +1411,30 @@ async function inspectJungler(): Promise<void> {
     jungleLocation.textContent = `Jungler visível: ${message}`
     lastConfirmedJungleZone = match.zone
     lastConfirmedJungleMarker = createOverlayMarker(match)
-    if (announcedJungleZone === match.zone) return
+    if (announcedJungleZone === match.zone) {
+      jungleZoneAlertCandidate = null
+      jungleZoneAlertCandidateSince = 0
+      return
+    }
+    if (announcedJungleZone === null) {
+      announcedJungleZone = match.zone
+      lastJungleZoneAnnouncementAt = Date.now()
+      jungleZoneAlertCandidate = null
+      jungleZoneAlertCandidateSince = 0
+    } else {
+      if (jungleZoneAlertCandidate !== match.zone) {
+        jungleZoneAlertCandidate = match.zone
+        jungleZoneAlertCandidateSince = Date.now()
+        return
+      }
+      if (Date.now() - jungleZoneAlertCandidateSince < jungleZoneChangeConfirmationMs) return
+      if (Date.now() - lastJungleZoneAnnouncementAt < jungleZoneAnnouncementCooldownMs) return
 
-    announcedJungleZone = match.zone
+      announcedJungleZone = match.zone
+      lastJungleZoneAnnouncementAt = Date.now()
+      jungleZoneAlertCandidate = null
+      jungleZoneAlertCandidateSince = 0
+    }
     const isLaneApproach =
       match.zone === 'top-lane' ||
       match.zone === 'mid-lane' ||
@@ -1899,7 +1926,7 @@ startCaptureButton.addEventListener('click', async () => {
 
   try {
     stream = await navigator.mediaDevices.getDisplayMedia({
-      video: { frameRate: 4 },
+      video: { frameRate: 8 },
       audio: false
     })
     video = document.createElement('video')
@@ -1919,7 +1946,7 @@ startCaptureButton.addEventListener('click', async () => {
     }, liveClientPollInterval)
     stream.getVideoTracks()[0]?.addEventListener('ended', stopCapture)
     stopCaptureButton.disabled = false
-    timer = window.setInterval(analyzeFrame, 250)
+    timer = window.setInterval(analyzeFrame, 125)
     analyzeFrame()
 
     try {
