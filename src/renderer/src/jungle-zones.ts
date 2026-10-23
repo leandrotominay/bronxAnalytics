@@ -73,8 +73,22 @@ export function classifyJungleZone(point: Point): JungleZone | null {
   return point.x < point.y ? 'jungle:blue' : 'jungle:red'
 }
 
-export function formatJungleZone(zone: JungleZone, ownSide: MapSide | null): string {
-  if (zone === 'baron-pit') return 'Jungler no covil do Barão.'
+export function formatJungleZone(
+  zone: JungleZone,
+  ownSide: MapSide | null,
+  gameSeconds: number | null = null
+): string {
+  if (zone === 'baron-pit') {
+    const objectiveLocation =
+      gameSeconds === null
+        ? 'covil do objetivo superior'
+        : gameSeconds < 14 * 60
+          ? 'covil das Vastilarvas'
+          : gameSeconds < 20 * 60
+            ? 'covil do Arauto'
+            : 'covil do Barão'
+    return `Jungler no ${objectiveLocation}.`
+  }
   if (zone === 'dragon-pit') return 'Jungler no covil do Dragão.'
   if (zone === 'river-top') return 'Jungler no rio superior.'
   if (zone === 'river-mid') return 'Jungler no rio central.'

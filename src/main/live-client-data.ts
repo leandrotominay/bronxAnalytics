@@ -118,8 +118,9 @@ function parseLiveClientMatch(data: unknown): ParsedLiveClientMatch {
       ? {
         championName: junglerName,
         hasSmite: playerHasSmite(junglerRecord),
-          source: identifiedByPosition ? 'position' : 'smite'
-        }
+        isDead: junglerRecord.isDead === true,
+        source: identifiedByPosition ? 'position' : 'smite'
+      }
       : null,
     ownTeamSide: ownTeam === 'ORDER' ? 'blue' : 'red'
   }

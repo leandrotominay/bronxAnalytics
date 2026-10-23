@@ -264,14 +264,11 @@ type JunglerTarget = {
   portraitUrl: string
 }
 const jungleScanInterval = 125
-const jungleMatchConfirmationScans = 2
-const jungleMatchPositionTolerance = 0.08
-const jungleMatchInstantScore = 0.1
-const jungleMatchInstantRingSamples = 9
-const jungleMatchInstantMargin = 0.03
+const jungleMatchConfirmationScans = 3
+const jungleMatchPositionTolerance = 0.03
 const jungleZoneChangeConfirmationMs = 1_250
 const jungleZoneAnnouncementCooldownMs = 5_000
-const liveClientPollInterval = 2500
+const liveClientPollInterval = 1000
 const voidGrubAlertTime = 7 * 60
 const voidGrubSpawnTime = 8 * 60
 const minimapRingSamplePoints = Array.from({ length: 16 }, (_, index) => {
@@ -280,7 +277,7 @@ const minimapRingSamplePoints = Array.from({ length: 16 }, (_, index) => {
 })
 const jungleMatchMaximumScore = 0.17
 const jungleMatchMinimumMargin = 0.015
-const jungleMatchMinimumRingSamples = 5
+const jungleMatchMinimumRingSamples = 8
 const minimapCropStorageKey = 'league-event-companion.minimap-crops.v1'
 const alertVoiceStorageKey = 'bronx-analytics.alert-voice.v2'
 const legacyAlertVoiceStorageKey = 'bronx-analytics.alert-voice.v1'
@@ -322,6 +319,7 @@ let lastConfirmedJungleMarker: OverlayMarker | null = null
 let jungleDisappearanceAnnounced = false
 let jungleMissedScans = 0
 let trackedJungler: JunglerTarget | null = null
+let trackedJunglerIsDead = false
 let jungleCaptureAnnounced = false
 let isDraggingMinimapCrop = false
 let calibrationDragOffset: Point = { x: 0, y: 0 }
@@ -825,6 +823,7 @@ function resetMatchEvents(): void {
   ownTeamSide = null
   jungleCaptureAnnounced = false
   trackedJungler = null
+  trackedJunglerIsDead = false
   junglerStatusElement.textContent = 'Aguardando identificar o jungler adversário.'
   jungleCard.hidden = false
   junglePortrait.removeAttribute('src')
@@ -838,6 +837,20 @@ function parseGameClock(text: string): number | null {
   const match = text.match(/(?:^|[^\d])(\d{1,2})\s*:\s*([0-5]\d)(?!\d)/)
   if (!match) return null
   return Number(match[1]) * 60 + Number(match[2])
+}
+
+function formatVoidGrubReminder(seconds: number): string | null {
+  if (seconds < voidGrubAlertTime) return null
+  if (seconds >= voidGrubSpawnTime) return 'As Vastilarvas já nasceram.'
+
+  const remainingSeconds = voidGrubSpawnTime - seconds
+  const remainingTime =
+    remainingSeconds === 60
+      ? '1 minuto'
+      : remainingSeconds < 60
+        ? `${remainingSeconds} segundos`
+        : `${Math.ceil(remainingSeconds / 60)} minutos`
+  return `As Vastilarvas nascem em ${remainingTime}.`
 }
 
 function drawCircularCrop(
@@ -903,6 +916,36 @@ async function applyLiveClientJungler(result: LiveClientJunglerResult): Promise<
     return
   }
   if (!(await assignJunglerChampion(champion.id))) return
+  trackedJunglerIsDead = result.jungler.isDead
+  if (trackedJunglerIsDead) {
+    pendingJungleZone = null
+    pendingJunglePoint = null
+    pendingJungleZoneScans = 0
+    announcedJungleZone = null
+    jungleZoneAlertCandidate = null
+    jungleZoneAlertCandidateSince = 0
+    lastConfirmedJungleZone = null
+    lastConfirmedJungleMarker = null
+    jungleDisappearanceAnnounced = false
+    jungleMissedScans = 0
+    setOverlayLastSeenMarker(null)
+    jungleLocation.textContent = 'Jungler morto; rastreamento pausado.'
+    junglerStatusElement.textContent = `Jungler identificado: ${champion.name}. Rastreamento pausado até o respawn.`
+    return
+  }
+  if (jungleLocation.textContent === 'Jungler morto; rastreamento pausado.') {
+    pendingJungleZone = null
+    pendingJunglePoint = null
+    pendingJungleZoneScans = 0
+    announcedJungleZone = null
+    jungleZoneAlertCandidate = null
+    jungleZoneAlertCandidateSince = 0
+    lastConfirmedJungleZone = null
+    lastConfirmedJungleMarker = null
+    jungleDisappearanceAnnounced = false
+    jungleMissedScans = 0
+    jungleLocation.textContent = 'Jungler reapareceu; procurando no minimapa.'
+  }
   junglerStatusElement.textContent =
     `Rastreando apenas ${champion.name}; identificado ${
       result.jungler.source === 'smite'
@@ -1008,6 +1051,7 @@ function resetJunglerTracking(): void {
 
 function clearTrackedJungler(): void {
   trackedJungler = null
+  trackedJunglerIsDead = false
   junglePortraitTemplate = null
   junglePortrait.hidden = true
   junglePortrait.removeAttribute('src')
@@ -1051,7 +1095,7 @@ function findPortraitOnMinimap(template: ImageData): MinimapScanDiagnostics {
   )
   const map = minimapContext!.getImageData(0, 0, width, height)
   const samplePoints: Array<{ x: number; y: number }> = []
-  const sampleSide = 8
+  const sampleSide = 12
   for (let y = 0; y < sampleSide; y += 1) {
     for (let x = 0; x < sampleSide; x += 1) {
       samplePoints.push({
@@ -1196,7 +1240,7 @@ function updateDiagnosticPanel(): void {
     `Anel vermelho (amostras): ${lastJungleScanDiagnostics.redRingSamples}`,
     `Score: ${lastJungleScanDiagnostics.bestScore?.toFixed(3) ?? '—'}; segundo candidato: ${lastJungleScanDiagnostics.runnerUpScore?.toFixed(3) ?? '—'}`,
     `Candidato: ${lastJungleScanDiagnostics.point && lastJungleScanDiagnostics.zone
-      ? `${formatJungleZone(lastJungleScanDiagnostics.zone, ownTeamSide)} (${lastJungleScanDiagnostics.point.x.toFixed(3)}, ${lastJungleScanDiagnostics.point.y.toFixed(3)})`
+      ? `${formatJungleZone(lastJungleScanDiagnostics.zone, ownTeamSide, lastRecognizedClock)} (${lastJungleScanDiagnostics.point.x.toFixed(3)}, ${lastJungleScanDiagnostics.point.y.toFixed(3)})`
       : 'nenhum confirmado'}`
   ]
   liveDiagnosticsElement.textContent = lines.join('\n')
@@ -1324,6 +1368,7 @@ captureDiagnosticControl.addEventListener('click', () => {
 })
 
 async function inspectJungler(): Promise<void> {
+  if (trackedJunglerIsDead) return
   if (jungleScanInProgress || Date.now() - lastJungleScanAt < jungleScanInterval) {
     return
   }
@@ -1358,7 +1403,8 @@ async function inspectJungler(): Promise<void> {
         if (lastConfirmedJungleZone && lastConfirmedJungleMarker) {
           const lastObservedArea = formatJungleZone(
             lastConfirmedJungleZone,
-            ownTeamSide
+            ownTeamSide,
+            lastRecognizedClock
           ).replace(/^Jungler\s+/, '').replace(/\.$/, '')
           jungleLocation.textContent =
             `Jungler não visível; última posição observada: ${lastObservedArea}`
@@ -1390,16 +1436,7 @@ async function inspectJungler(): Promise<void> {
       pendingJunglePoint = match.point
       pendingJungleZoneScans = 1
     }
-    const isInstantConfirmation =
-      match.bestScore !== null &&
-      match.bestScore <= jungleMatchInstantScore &&
-      match.redRingSamples >= jungleMatchInstantRingSamples &&
-      (match.runnerUpScore === null ||
-        match.runnerUpScore - match.bestScore >= jungleMatchInstantMargin)
-    if (
-      pendingJungleZoneScans < jungleMatchConfirmationScans &&
-      !isInstantConfirmation
-    ) return
+    if (pendingJungleZoneScans < jungleMatchConfirmationScans) return
 
     if (jungleDisappearanceAnnounced) {
       jungleDisappearanceAnnounced = false
@@ -1407,7 +1444,7 @@ async function inspectJungler(): Promise<void> {
     }
     jungleMissedScans = 0
 
-    const message = formatJungleZone(match.zone, ownTeamSide)
+    const message = formatJungleZone(match.zone, ownTeamSide, lastRecognizedClock)
     jungleLocation.textContent = `Jungler visível: ${message}`
     lastConfirmedJungleZone = match.zone
     lastConfirmedJungleMarker = createOverlayMarker(match)
@@ -1566,17 +1603,11 @@ async function readGameClock(): Promise<void> {
     lastClockSampleAt = now
     if (stableClockSamples < 2) return
 
-    if (!voidGrubAlertAnnounced && seconds >= voidGrubAlertTime) {
-      voidGrubAlertAnnounced = true
-      if (seconds < voidGrubSpawnTime) {
-        const remainingSeconds = voidGrubSpawnTime - seconds
-        const remainingTime =
-          remainingSeconds === 60
-            ? '1 minuto'
-            : remainingSeconds < 60
-              ? `${remainingSeconds} segundos`
-              : `${Math.ceil(remainingSeconds / 60)} minutos`
-        announceEvent(`As Vastilarvas nascem em ${remainingTime}.`)
+    if (!voidGrubAlertAnnounced) {
+      const reminder = formatVoidGrubReminder(seconds)
+      if (reminder !== null) {
+        announceEvent(reminder)
+        voidGrubAlertAnnounced = true
       }
     }
   } catch (error) {

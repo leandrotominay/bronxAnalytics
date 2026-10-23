@@ -1,6 +1,7 @@
 export type LiveClientJungler = {
   championName: string
   hasSmite: boolean
+  isDead: boolean
   source: 'position' | 'smite'
 }
 
