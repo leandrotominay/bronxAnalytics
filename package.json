@@ -1,5 +1,6 @@
 {
-  "name": "league-event-companion",
+  "name": "bronx-analytics",
+  "productName": "Bronx Analytics",
   "version": "0.1.0",
   "private": true,
   "type": "module",

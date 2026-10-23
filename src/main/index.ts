@@ -1,19 +1,26 @@
+/// <reference types="electron-vite/node" />
+
 import {
   app,
   BrowserWindow,
   desktopCapturer,
+  dialog,
   ipcMain,
   screen,
   session,
   type DesktopCapturerSource
 } from 'electron'
+import bronxAnalyticsIcon from '../../resources/bronx-analytics.ico?asset'
+import { mkdir, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createWorker, PSM } from 'tesseract.js'
+import { readLiveClientRoster } from './live-client-data'
 
 const currentDirectory = fileURLToPath(new URL('.', import.meta.url))
 const require = createRequire(import.meta.url)
+app.setName('Bronx Analytics')
 const englishDataDirectory = join(
   dirname(require.resolve('@tesseract.js-data/eng')),
   '4.0.0'
@@ -50,12 +57,13 @@ function assertMainWindowSender(sender: Electron.WebContents): void {
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
-    width: 340,
-    height: 300,
-    minWidth: 280,
-    minHeight: 220,
-    title: 'League Event Companion',
-    backgroundColor: '#10131b',
+    width: 1120,
+    height: 820,
+    minWidth: 760,
+    minHeight: 620,
+    title: 'Bronx Analytics',
+    icon: bronxAnalyticsIcon,
+    backgroundColor: '#0d0d10',
     webPreferences: {
       preload: join(currentDirectory, '../preload/index.cjs'),
       contextIsolation: true,
@@ -203,6 +211,11 @@ app.whenReady().then(() => {
     }
   })
 
+  ipcMain.handle('live-client:read-roster', (event) => {
+    assertMainWindowSender(event.sender)
+    return readLiveClientRoster()
+  })
+
   ipcMain.handle('game-ocr:read-clock', async (event, image: unknown) => {
     assertMainWindowSender(event.sender)
     if (!(image instanceof Uint8Array) || image.byteLength === 0 || image.byteLength > 512_000) {
@@ -224,6 +237,72 @@ app.whenReady().then(() => {
     if (ocrWorker) await ocrWorker.terminate()
     ocrWorker = null
     ocrWorkerPromise = null
+  })
+
+  ipcMain.handle('diagnostics:save-sample', async (event, sample: unknown) => {
+    assertMainWindowSender(event.sender)
+    if (
+      typeof sample !== 'object' ||
+      sample === null ||
+      !('manifest' in sample) ||
+      !('images' in sample) ||
+      typeof sample.manifest !== 'string' ||
+      typeof sample.images !== 'object' ||
+      sample.images === null ||
+      sample.manifest.length > 1_000_000
+    ) {
+      throw new Error('Invalid visual diagnostic sample.')
+    }
+    const images = sample.images as Record<string, unknown>
+    const entries = Object.entries(images)
+    const totalEncodedBytes = entries.reduce(
+      (total, [, data]) => total + (typeof data === 'string' ? data.length : 0),
+      0
+    )
+    if (
+      entries.length < 1 ||
+      entries.length > 8 ||
+      totalEncodedBytes > 60_000_000 ||
+      entries.some(
+        ([name, data]) =>
+          !/^[a-z0-9-]+\.png$/i.test(name) ||
+          typeof data !== 'string' ||
+          data.length > 20_000_000 ||
+          !data.startsWith('data:image/png;base64,')
+      )
+    ) {
+      throw new Error('Diagnostic images are invalid or too large.')
+    }
+
+    const choice = await dialog.showOpenDialog(mainWindow!, {
+      title: 'Escolha onde salvar a amostra de diagnóstico',
+      properties: ['openDirectory', 'createDirectory']
+    })
+    if (choice.canceled || choice.filePaths.length === 0) return null
+
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
+    const directory = join(choice.filePaths[0], `league-diagnostic-${timestamp}`)
+    await mkdir(directory, { recursive: false })
+    await writeFile(join(directory, 'manifest.json'), sample.manifest, {
+      encoding: 'utf8',
+      flag: 'wx'
+    })
+    for (const [name, data] of entries) {
+      const base64 = (data as string).slice('data:image/png;base64,'.length)
+      const buffer = Buffer.from(base64, 'base64')
+      if (
+        buffer.length === 0 ||
+        buffer.length > 15_000_000 ||
+        buffer[0] !== 0x89 ||
+        buffer[1] !== 0x50 ||
+        buffer[2] !== 0x4e ||
+        buffer[3] !== 0x47
+      ) {
+        throw new Error(`Diagnostic image ${name} is not a valid PNG.`)
+      }
+      await writeFile(join(directory, name), buffer, { flag: 'wx' })
+    }
+    return directory
   })
 
   ipcMain.handle('capture:list-league-windows', async (event) => {

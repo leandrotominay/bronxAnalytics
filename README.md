@@ -1,6 +1,8 @@
-# League Event Companion
+# Bronx Analytics
 
-Windows desktop proof of concept built with Electron and TypeScript.
+Windows desktop companion built with Electron and TypeScript. The interface
+uses a dark charcoal surface with crimson accents; developer diagnostics are
+hidden until **Modo desenvolvedor** is enabled.
 
 ## Run locally
 
@@ -18,8 +20,16 @@ The app searches desktop window titles for `League of Legends (TM) Client` on
 startup and retries while none is available. If exactly one matching window
 is found, it selects it automatically; if several match, it selects the first
 and reports that choice. Capture begins only after the user presses Start.
-The compact interface has Start/Stop controls and an
-alert list; window discovery and minimap estimation happen in the background.
+The dashboard presents capture controls, recent alerts, the opponent roster,
+and the detected jungler. Technical diagnostics and manual calibration tools
+are hidden until **Modo desenvolvedor** is enabled; this switch does not pause
+alert audio. Within developer mode, audio can be paused separately.
+Alert speech can be customized independently: choose an installed system voice,
+adjust its rate and pitch, and preview it. Preferences are stored locally on
+the device; the available voices depend on Windows speech settings. Speech is
+provided locally by Windows and alert text is not sent to a voice service.
+Next session priorities are tracked in:
+[`TODO-PROXIMA-SESSAO.md`](./TODO-PROXIMA-SESSAO.md).
 The minimap region is estimated from its standard bottom-right placement. The
 renderer automatically looks for red pixel components inside that region and
 assigns them to top, mid, or bot using their position: a diagonal band is mid,
@@ -37,6 +47,27 @@ and, during active capture, in the separate overlay. The app does not modify
 the game. Frames stay in the local renderer and are not uploaded. Do not rely
 on this prototype for accurate in-game alerts.
 
+## Local match diagnostics
+
+Turn on **Diagnóstico** before capture or during a match to pause speech while
+keeping visual overlay alerts active. The panel shows the actual captured
+frame dimensions, Live Client API roster status,
+current capture profile, minimap crop bounds, lane marker counts and watch
+timers, and the last minimap match status and scores. The minimap preview marks
+the latest candidate even when it is rejected as ambiguous or low-confidence.
+The **Salvar amostra diagnóstica** button is available during capture without
+enabling diagnostic mode; this lets you collect a sample while alerts remain
+active.
+
+Before saving a sample, enter the expected jungler champion and the zone you
+observe in the visible game (or choose "Não visível"). Click **Salvar amostra
+diagnóstica** and choose a local folder. The app writes a timestamped directory
+with `manifest.json`, the full captured frame, the calibrated minimap crop,
+and the current roster from the local match API. Saving is an explicit user
+action; no frames are uploaded or saved automatically. Use samples from one
+match to calibrate, then collect separate matches to measure false alerts,
+misses, and location accuracy.
+
 During active capture, a separate transparent, click-through overlay displays
 each new alert near the top-left of the primary display for seven seconds. It
 does not take focus or intercept mouse/keyboard input, and it is hidden when
@@ -45,62 +76,64 @@ the overlay. The overlay is attached to the primary display and can remain
 visible over other apps while capture is active.
 
 The companion reads the visible game clock locally with Tesseract OCR. It
-checks overlapping regions around the upper-right timer and reports when
-neither yields a readable time. It does not analyze the minimap or issue lane
-alerts before 01:20. At that threshold it resets lane tracking, starts
-automatic minimap detection, and asks the user to press TAB; if capture starts
-after 01:20, it does so as soon as the current clock is recognized. Detection
-then reports lane markers disappearing for more than five seconds. This avoids
-treating the initial absence of lane opponents as a missing-player alert.
+checks compact, overlapping crops around the upper-right timer and reports
+the raw OCR text and confidence in diagnostic mode and saved samples. The
+clock parser can extract a time even when OCR also picks up nearby HUD digits.
+Lane-marker detection and missing-laner alerts wait until 01:20, when the
+clock activates lane tracking; this avoids treating the initial absence of
+lane opponents as a missing-player alert. Jungler minimap scans start as soon
+as the API identifies a jungler and do not depend on OCR recognizing the
+clock. Lane-marker detection uses the same calibrated minimap crop and alerts
+when the red-marker count in a lane drops after that lane has been seen. It is
+an aggregate lane signal, not yet reliable identification of a specific
+champion disappearing. No TAB action is required.
 Clock and minimap heuristics are experimental and may fail depending on
 resolution, HUD scale, and image quality. The companion warns when Void Grubs
 are due to spawn at 08:00, starting at 07:00; if detection starts later, the
 warning reports the remaining time when the grubs have not spawned yet.
 
-After 01:20, while the TAB scoreboard is open, the companion checks the second
-red-team rows for champion portraits. It searches a small area around each
-expected row position and compares the captured image against a bundled local
-catalog of Riot Data Dragon champion icons (version 16.21.1). Because row
-positions vary with resolution and HUD scale, use "Ajustar recortes do TAB"
-while the scoreboard is visible: drag each numbered circle over only the
-champion portrait and adjust its size. The guide and matching crop are circular;
-pointer positioning accounts for letterboxing in the calibration preview.
-Crop positions persist locally in a profile keyed to the captured frame
-resolution, so windowed and bordered-fullscreen captures can keep separate
-calibrations. Select "Minimapa" to move and resize the minimap search area in
-the same preview; its calibration is cached separately per captured
-resolution.
-During calibration, each row reports the best icon match, error, and margin;
-these measurements help distinguish a misaligned crop from an unsuitable
-matching threshold. Three consecutive confident matches produce a visual
-suggestion, but never assign a champion automatically: confirm the suggestion
-or select the champion manually. This prevents an uncertain visual match from
-silently changing the jungler tracker. Uncertain crops remain unidentified,
-and the same champion cannot be confirmed in multiple roster rows. The official
-square icon and champion name are shown; a confirmed suggestion uses the
-circular in-game crop as the local visual template for red-ringed minimap icons.
-The minimap search scales expected icon size to its calibrated dimensions.
-Confirm the jungler suggestion (or select the champion) and assign the second
-TAB row to JUNGLE; only then can that portrait drive minimap tracking and
-location alerts.
-TAB visibility is checked independently on every captured frame, even before
-lane detection is enabled. After two consecutive frames confirm the scoreboard,
-the companion immediately displays five placeholder cards and announces
-"Inimigos detectados com sucesso."; champion matching then runs asynchronously
-and fills in each card as portraits are identified.
-When a confirmed portrait is captured for the jungle assignment, the companion
-announces "Captura do jungler feita com sucesso." The roster shows only each
-champion and its lane assignment; changing the lane selector swaps assignments,
-so the user can correct the default TOP/JUNGLE/MID/ADC/SUPPORT order. Lane
-disappearance alerts require an identified champion and are deferred while that
-champion's portrait is still recognized on the minimap.
-Only a strong, unambiguous match that remains in the same place across
-consecutive scans is reported as top, top river near Void Grubs, mid, bot river
-near dragon, or bot. This experimental image match uses the current scoreboard
-portrait rather than downloading a full champion library; it may not match
-every HUD scale or minimap rendering, and it may withhold alerts when a match
-is uncertain. The bundled champion art is from Riot Games Data Dragon and can
-be refreshed from its published champion catalog when game patches change.
+Diagnostic mode pauses speech while keeping visual overlay alerts active. It
+starts disabled each time the app opens, and adjusting the minimap does not
+enable it.
+
+The opponent roster comes from the documented local Game Client API endpoint
+`https://127.0.0.1:2999/liveclientdata/allgamedata`. The app filters out the
+active player's team and uses each opponent's champion and `position` fields.
+It polls only while capture is active, sends no player data off-device, and
+does not require a Riot API key. Riot's root certificate is used to validate
+the local HTTPS connection; certificate verification is not disabled. If the
+API omits or duplicates a position, the roster marks it as unknown and does not
+track that player as jungler until the user corrects the lane. A temporary API
+failure is shown in the roster status.
+
+The API identifies players and lanes but does not return their map coordinates.
+For minimap tracking, the app uses the local Data Dragon champion icon (version
+16.21.1) as the visual template and analyzes only the visible minimap. This
+match is experimental and may fail with minimap scaling, overlapping icons, or
+low image detail; it does not infer a hidden enemy position. The roster's lane
+selector remains available for manual corrections, which are kept while the
+match API continues updating.
+
+The minimap search scales expected icon size to the calibrated minimap bounds.
+Use **Ajustar minimapa** to move and resize that area; its calibration is cached
+separately for each captured frame resolution. After two stable, confident
+matches, the app announces transitions between approximate map regions:
+upper/middle/lower river, top/mid/bottom lane, Baron and Dragon pits, and the
+Blue, Red, Gromp, Wolves, Raptors, and Krugs camps on either map side. Camp and
+base alerts are labeled allied or enemy based on the player's team from the
+local match API. Region boundaries are geometric estimates from normalized
+minimap coordinates, not game-provided coordinates; validate them in a live
+match and treat ambiguous or low-confidence portrait matches as inconclusive.
+The tracker only reports a jungler portrait currently visible on the minimap;
+it does not estimate a hidden position. Lane disappearance alerts require an
+identified champion and are deferred while that champion's portrait is still
+recognized on the minimap.
+
+The Game Client API is available only to native applications and uses a local
+self-signed HTTPS certificate. Riot requires products to be registered and
+their Game Client API use to be documented; read the current policies before
+distribution. Do not disable certificate verification or use the API to reveal
+information that is not available through normal gameplay.
 Zone classification checks the mid diagonal before outer-lane areas and uses
 the map diagonal to distinguish the two river sides, avoiding the earlier
 left/right comparison that could label bot-side positions as top.

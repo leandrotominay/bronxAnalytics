@@ -1,0 +1,102 @@
+{
+  "schemaVersion": 1,
+  "capturedAt": "2026-10-23T13:49:33.569Z",
+  "frame": {
+    "width": 1920,
+    "height": 1080
+  },
+  "captureProfile": "1920x1080",
+  "gameClockSeconds": 113,
+  "clockOcr": [
+    {
+      "region": "HUD superior direito",
+      "text": "01:53\n",
+      "confidence": 0,
+      "parsedSeconds": 113
+    }
+  ],
+  "expected": {
+    "junglerChampion": null,
+    "junglerZone": null
+  },
+  "minimapCrop": {
+    "x": 0.927,
+    "y": 0.8794444444444445,
+    "size": 0.14
+  },
+  "minimapRegion": {
+    "left": 1645,
+    "top": 815,
+    "right": 1914,
+    "bottom": 1080
+  },
+  "roster": [
+    {
+      "lane": "mid",
+      "laneSource": "api",
+      "championId": "Heimerdinger",
+      "championName": "Heimerdinger"
+    },
+    {
+      "lane": "jungle",
+      "laneSource": "api",
+      "championId": "Ekko",
+      "championName": "Ekko"
+    },
+    {
+      "lane": "top",
+      "laneSource": "api",
+      "championId": "Kennen",
+      "championName": "Kennen"
+    },
+    {
+      "lane": "support",
+      "laneSource": "api",
+      "championId": "Shen",
+      "championName": "Shen"
+    },
+    {
+      "lane": "adc",
+      "laneSource": "api",
+      "championId": "Twitch",
+      "championName": "Twitch"
+    }
+  ],
+  "minimapScan": {
+    "status": "score-too-high",
+    "point": {
+      "x": 0.845724907063197,
+      "y": 0.11132075471698114
+    },
+    "zone": "mid",
+    "bestScore": 0.18792892156862726,
+    "runnerUpScore": 0.1917075163398691,
+    "redRingSamples": 6
+  },
+  "laneDetection": {
+    "enabled": true,
+    "counts": {
+      "top": 2,
+      "mid": 3,
+      "bot": 5
+    },
+    "watches": {
+      "top": {
+        "hasBeenSeen": true,
+        "missingSeconds": null,
+        "alerted": false
+      },
+      "mid": {
+        "hasBeenSeen": true,
+        "missingSeconds": null,
+        "alerted": false
+      },
+      "bot": {
+        "hasBeenSeen": true,
+        "missingSeconds": null,
+        "alerted": false
+      }
+    }
+  },
+  "note": "Captured locally from the user-authorized visible game window."
+}

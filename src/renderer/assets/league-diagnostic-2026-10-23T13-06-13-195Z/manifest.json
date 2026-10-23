@@ -1,0 +1,141 @@
+{
+  "schemaVersion": 1,
+  "capturedAt": "2026-10-23T13:05:46.361Z",
+  "frame": {
+    "width": 1920,
+    "height": 1080
+  },
+  "captureProfile": "1920x1080",
+  "gameClockSeconds": 80,
+  "scoreboardVisible": false,
+  "expected": {
+    "junglerChampion": "Ekko",
+    "junglerZone": null
+  },
+  "championCropPositions": [
+    {
+      "x": 0.5601428571428572,
+      "y": 0.3441815476190476,
+      "size": 0.024
+    },
+    {
+      "x": 0.5601428571428573,
+      "y": 0.41,
+      "size": 0.027
+    },
+    {
+      "x": 0.5610952380952382,
+      "y": 0.4829092261904762,
+      "size": 0.025
+    },
+    {
+      "x": 0.5601428571428572,
+      "y": 0.5469549851190476,
+      "size": 0.025
+    },
+    {
+      "x": 0.5591904761904763,
+      "y": 0.6127734375,
+      "size": 0.027
+    }
+  ],
+  "minimapCrop": {
+    "x": 0.927,
+    "y": 0.8794444444444445,
+    "size": 0.13
+  },
+  "minimapRegion": {
+    "left": 1655,
+    "top": 825,
+    "right": 1905,
+    "bottom": 1075
+  },
+  "championRows": [
+    {
+      "row": 1,
+      "best": "Ornn",
+      "score": 0.0893415937236711,
+      "margin": 0.012851460774739587,
+      "accepted": false
+    },
+    {
+      "row": 2,
+      "best": "Ornn",
+      "score": 0.08919870214524613,
+      "margin": 0.006810777950910174,
+      "accepted": false
+    },
+    {
+      "row": 3,
+      "best": "Ornn",
+      "score": 0.08948576684091605,
+      "margin": 0.004802970636903853,
+      "accepted": false
+    },
+    {
+      "row": 4,
+      "best": "Ornn",
+      "score": 0.08697179657181883,
+      "margin": 0.018112107819201903,
+      "accepted": true
+    },
+    {
+      "row": 5,
+      "best": "Ornn",
+      "score": 0.0805459066154131,
+      "margin": 0.022668302448746416,
+      "accepted": true
+    }
+  ],
+  "roster": [
+    {
+      "lane": "top",
+      "championId": null,
+      "championName": null,
+      "candidateChampionId": null,
+      "candidateChampionScans": 0,
+      "manuallySelected": false
+    },
+    {
+      "lane": "jungle",
+      "championId": null,
+      "championName": null,
+      "candidateChampionId": null,
+      "candidateChampionScans": 0,
+      "manuallySelected": false
+    },
+    {
+      "lane": "mid",
+      "championId": null,
+      "championName": null,
+      "candidateChampionId": null,
+      "candidateChampionScans": 0,
+      "manuallySelected": false
+    },
+    {
+      "lane": "adc",
+      "championId": null,
+      "championName": null,
+      "candidateChampionId": "Ornn",
+      "candidateChampionScans": 9,
+      "manuallySelected": false
+    },
+    {
+      "lane": "support",
+      "championId": null,
+      "championName": null,
+      "candidateChampionId": "Ornn",
+      "candidateChampionScans": 12,
+      "manuallySelected": false
+    }
+  ],
+  "minimapScan": {
+    "status": "not-run",
+    "point": null,
+    "zone": null,
+    "bestScore": null,
+    "runnerUpScore": null,
+    "redRingSamples": 0
+  },
+  "note": "Captured locally from the user-authorized visible game window."
+}

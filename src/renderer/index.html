@@ -8,66 +8,220 @@
       content="default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'"
     />
     <link rel="stylesheet" href="/src/style.css" />
-    <title>League Event Companion</title>
+    <meta name="theme-color" content="#101012" />
+    <title>Bronx Analytics</title>
   </head>
   <body>
-    <main class="app">
-      <div class="controls">
-        <button id="start-button" type="button" disabled>Start</button>
-        <button id="stop-button" type="button" disabled>Stop</button>
+    <main class="app-shell">
+      <aside class="sidebar" aria-label="Navegação principal">
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true">B</span>
+          <span class="brand-name">BRONX<span>ANALYTICS</span></span>
+        </div>
+        <div class="sidebar-divider"></div>
+        <span class="sidebar-caption">COMPANION</span>
+        <div class="sidebar-current" aria-current="page">
+          <span class="sidebar-current-mark" aria-hidden="true"></span>
+          <span>Partida</span>
+        </div>
+        <div class="sidebar-bottom">
+          <span class="sidebar-build">BETA · LOCAL</span>
+        </div>
+      </aside>
+      <div class="workspace">
+        <header class="topbar">
+          <div class="topbar-title">
+            <span class="eyebrow">LEAGUE OF LEGENDS</span>
+            <h1>Central da partida</h1>
+          </div>
+          <div class="topbar-actions">
+            <span class="connection-indicator" aria-hidden="true"></span>
+            <span id="status" class="capture-status" role="status">Procurando o jogo...</span>
+            <button id="voice-settings-button" class="voice-settings-button" type="button" aria-expanded="false" aria-controls="voice-settings">
+              Voz dos alertas
+            </button>
+            <button id="developer-mode-button" class="developer-mode-button" type="button" aria-pressed="false">
+              Modo desenvolvedor
+            </button>
+          </div>
+        </header>
+
+        <section class="match-toolbar" aria-label="Controles da partida">
+          <div>
+            <span class="eyebrow">SESSÃO ATUAL</span>
+            <p>Seus alertas e informações em um só lugar.</p>
+          </div>
+          <div class="controls">
+            <button id="start-button" class="primary-button" type="button" disabled>
+              <span aria-hidden="true">▶</span> Iniciar leitura
+            </button>
+            <button id="stop-button" class="secondary-button" type="button" disabled>Encerrar</button>
+          </div>
+        </section>
+
+        <section id="voice-settings" class="voice-settings" aria-label="Configurações de voz" hidden>
+          <div class="voice-settings-heading">
+            <div>
+              <span class="eyebrow">PERSONALIZAÇÃO</span>
+              <h2>Voz dos alertas</h2>
+              <p>Usa vozes instaladas no Windows. A síntese acontece localmente, sem assinatura ou envio dos alertas à nuvem.</p>
+            </div>
+            <button id="test-voice-button" class="secondary-button" type="button">▶ Ouvir prévia</button>
+          </div>
+          <div class="voice-controls">
+            <label class="voice-select-label" for="alert-voice-select">
+              Voz instalada
+              <select id="alert-voice-select">
+                <option value="">Automática (Português do sistema)</option>
+              </select>
+            </label>
+            <label class="voice-range-label" for="alert-voice-rate">
+              <span>Velocidade <output id="alert-voice-rate-value" for="alert-voice-rate">1.00×</output></span>
+              <input id="alert-voice-rate" type="range" min="0.75" max="1.25" step="0.05" value="1" />
+            </label>
+            <label class="voice-range-label" for="alert-voice-pitch">
+              <span>Tom <output id="alert-voice-pitch-value" for="alert-voice-pitch">1.00</output></span>
+              <input id="alert-voice-pitch" type="range" min="0.7" max="1.3" step="0.05" value="1" />
+            </label>
+          </div>
+          <p id="voice-settings-status" class="voice-settings-status" role="status">
+            As vozes disponíveis dependem do sistema operacional.
+          </p>
+        </section>
+
+        <div class="dashboard-grid">
+          <section class="dashboard-card jungler-card" id="jungler-card" hidden aria-live="polite">
+            <div class="card-heading">
+              <div>
+                <span class="eyebrow">RASTREAMENTO</span>
+                <h2>Jungler inimigo</h2>
+              </div>
+              <span class="live-tag"><span></span> AO VIVO</span>
+            </div>
+            <div class="jungler-content">
+              <img id="jungler-portrait" alt="Retrato do jungler inimigo" />
+              <div class="jungler-details">
+                <strong>Localização atual</strong>
+                <span id="jungler-location">Aguardando a API local da partida.</span>
+              </div>
+            </div>
+          </section>
+
+          <section class="dashboard-card events-card">
+            <div class="card-heading">
+              <div>
+                <span class="eyebrow">ATIVIDADE</span>
+                <h2>Alertas recentes</h2>
+              </div>
+              <span class="card-count" id="event-count">0</span>
+            </div>
+            <ol id="event-list" class="event-list" aria-live="polite">
+              <li class="empty-state">Os alertas da partida aparecerão aqui.</li>
+            </ol>
+          </section>
+
+          <section id="enemy-roster" class="dashboard-card enemy-roster" hidden>
+            <div class="card-heading">
+              <div>
+                <span class="eyebrow">TIME ADVERSÁRIO</span>
+                <h2>Jogadores</h2>
+              </div>
+              <button id="calibrate-minimap-button" class="text-button" type="button">Ajustar minimapa</button>
+            </div>
+            <p id="roster-status" class="capture-status roster-status" role="status">
+              Aguardando captura para consultar a API local da partida.
+            </p>
+            <ol id="enemy-player-list" class="enemy-player-list"></ol>
+          </section>
+        </div>
+
+        <section id="developer-tools" class="developer-tools" hidden>
+          <div class="developer-heading">
+            <div>
+              <span class="eyebrow">FERRAMENTAS INTERNAS</span>
+              <h2>Modo desenvolvedor</h2>
+            </div>
+            <button id="diagnostic-mode-button" class="secondary-button" type="button" aria-pressed="false">
+              Pausar áudio dos alertas
+            </button>
+          </div>
+          <section id="diagnostic-panel" class="diagnostic-panel">
+            <div class="diagnostic-panel-heading">
+              <div>
+                <strong>Diagnóstico da partida</strong>
+                <p>As informações técnicas ficam ocultas no modo normal.</p>
+              </div>
+              <button id="capture-diagnostic-button" class="secondary-button" type="button" disabled>
+                Salvar amostra
+              </button>
+            </div>
+            <div class="diagnostic-labels">
+              <label>
+                Campeão esperado
+                <input id="expected-jungler" type="text" maxlength="40" placeholder="Ex.: Nocturne" />
+              </label>
+              <label>
+                Zona esperada
+                <select id="expected-zone">
+                  <option value="">Não anotada</option>
+                  <option value="top-lane">Rota superior</option>
+                  <option value="river-top">Rio superior</option>
+                  <option value="river-mid">Rio central</option>
+                  <option value="river-bot">Rio inferior</option>
+                  <option value="mid-lane">Rota do meio</option>
+                  <option value="bot-lane">Rota inferior</option>
+                  <option value="baron-pit">Covil do Barão</option>
+                  <option value="dragon-pit">Covil do Dragão</option>
+                  <optgroup label="Selva do lado azul">
+                    <option value="jungle:blue">Selva do lado azul</option>
+                    <option value="camp:blue:blue-buff">Blue (lado azul)</option>
+                    <option value="camp:blue:red-buff">Red (lado azul)</option>
+                    <option value="camp:blue:gromp">Grompe (lado azul)</option>
+                    <option value="camp:blue:wolves">Lobos (lado azul)</option>
+                    <option value="camp:blue:raptors">Acúleos (lado azul)</option>
+                    <option value="camp:blue:krugs">Krugues (lado azul)</option>
+                  </optgroup>
+                  <optgroup label="Selva do lado vermelho">
+                    <option value="jungle:red">Selva do lado vermelho</option>
+                    <option value="camp:red:blue-buff">Blue (lado vermelho)</option>
+                    <option value="camp:red:red-buff">Red (lado vermelho)</option>
+                    <option value="camp:red:gromp">Grompe (lado vermelho)</option>
+                    <option value="camp:red:wolves">Lobos (lado vermelho)</option>
+                    <option value="camp:red:raptors">Acúleos (lado vermelho)</option>
+                    <option value="camp:red:krugs">Krugues (lado vermelho)</option>
+                  </optgroup>
+                  <option value="not-visible">Não visível</option>
+                </select>
+              </label>
+            </div>
+            <canvas id="diagnostic-minimap-preview" width="192" height="192" aria-label="Prévia do minimapa e candidato encontrado"></canvas>
+            <p id="diagnostic-status" role="status">O modo de diagnóstico mantém avisos visuais; o áudio pode ser pausado separadamente.</p>
+            <pre id="live-diagnostics" aria-live="polite">Aguardando captura.</pre>
+          </section>
+        </section>
       </div>
-      <p id="status" class="capture-status" role="status">Procurando o jogo...</p>
-      <section id="jungler-card" class="jungler-card" hidden aria-live="polite">
-        <img id="jungler-portrait" alt="Retrato do jungler inimigo" />
-        <div>
-          <strong>Jungler inimigo</strong>
-          <span id="jungler-location">Aguardando o retrato no placar TAB.</span>
-        </div>
-      </section>
-      <section id="enemy-roster" class="enemy-roster" hidden>
-        <div class="roster-heading">
-          <strong>Oponentes</strong>
-          <span>Arraste para corrigir as posições ou ajuste os recortes do TAB.</span>
-        </div>
-        <button id="calibrate-portraits-button" type="button">Ajustar recortes do TAB</button>
-        <ol id="enemy-player-list" class="enemy-player-list"></ol>
-      </section>
-      <dialog id="portrait-calibration" class="portrait-calibration">
+      <dialog id="minimap-calibration" class="minimap-calibration">
         <form method="dialog" class="calibration-header">
           <div>
-            <strong>Ajuste dos retratos do placar</strong>
-            <p>Arraste o círculo para cobrir só o retrato do campeão. Escolha cada linha abaixo.</p>
+            <strong>Ajuste do minimapa</strong>
+            <p>Arraste o quadrado para cobrir somente a área jogável do minimapa.</p>
             <p id="calibration-resolution">Perfil de captura: aguardando o jogo.</p>
           </div>
           <button type="submit" aria-label="Fechar">Fechar</button>
         </form>
-        <canvas id="calibration-preview" aria-label="Prévia do placar com áreas de recorte"></canvas>
+        <canvas id="calibration-preview" aria-label="Prévia do minimapa e da região selecionada"></canvas>
         <div class="calibration-controls">
           <label>
-            Área
-            <select id="calibration-row">
-              <option value="0">1 — TOP</option>
-              <option value="1">2 — JUNGLE</option>
-              <option value="2">3 — MID</option>
-              <option value="3">4 — ADC</option>
-              <option value="4">5 — SUPORTE</option>
-              <option value="5">Minimapa</option>
-            </select>
+            Tamanho do minimapa
+            <input id="calibration-size" type="range" min="0.05" max="0.3" step="0.005" />
           </label>
-          <label>
-            Tamanho do recorte
-            <input id="calibration-size" type="range" min="0.02" max="0.07" step="0.001" />
-          </label>
-          <button id="reset-calibration-button" type="button">Restaurar posições</button>
+          <button id="reset-calibration-button" type="button">Restaurar posição padrão</button>
         </div>
         <p id="calibration-feedback" class="calibration-feedback" aria-live="polite">
-          Inicie a captura e abra o TAB para ajustar os retratos.
+          Arraste o quadrado para ajustar a área do minimapa.
         </p>
       </dialog>
       <canvas id="screen-canvas" aria-hidden="true"></canvas>
-      <ol id="event-list" class="event-list" aria-live="polite">
-        <li class="empty-state">Alertas aparecerão aqui.</li>
-      </ol>
     </main>
     <script type="module" src="/src/main.ts"></script>
   </body>
