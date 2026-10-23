@@ -5,25 +5,82 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'"
+      content="default-src 'self'; connect-src 'self' https://huggingface.co https://cdn-lfs.huggingface.co https://cas-bridge.xethub.hf.co; img-src 'self' data: https://ddragon.leagueoflegends.com; media-src 'self' blob:; style-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:"
     />
     <link rel="stylesheet" href="/src/style.css" />
     <meta name="theme-color" content="#101012" />
-    <title>Bronx Analytics</title>
+    <title>Bronx I.A.</title>
   </head>
   <body>
     <main class="app-shell">
+      <header class="window-titlebar" aria-label="Barra da janela">
+        <div class="window-titlebar-brand">
+          <span class="window-titlebar-mark" aria-hidden="true">B</span>
+          <span>Bronx I.A.</span>
+        </div>
+        <div class="window-titlebar-controls">
+          <button id="window-minimize" class="window-control" type="button" aria-label="Minimizar janela">
+            <svg aria-hidden="true" viewBox="0 0 16 16"><path d="M3 11.5h10" /></svg>
+          </button>
+          <button id="window-maximize" class="window-control" type="button" aria-label="Maximizar janela">
+            <svg class="maximize-icon" aria-hidden="true" viewBox="0 0 16 16"><path d="M3.5 3.5h9v9h-9z" /></svg>
+            <svg class="restore-icon" aria-hidden="true" viewBox="0 0 16 16"><path d="M5 5V3.5h7.5V11H11M4 5h7v7H4z" /></svg>
+          </button>
+          <button id="window-close" class="window-control window-control-close" type="button" aria-label="Fechar aplicativo">
+            <svg aria-hidden="true" viewBox="0 0 16 16"><path d="m4 4 8 8m0-8-8 8" /></svg>
+          </button>
+        </div>
+      </header>
       <aside class="sidebar" aria-label="Navegação principal">
         <div class="brand">
           <span class="brand-mark" aria-hidden="true">B</span>
-          <span class="brand-name">BRONX<span>ANALYTICS</span></span>
+          <span class="brand-name">BRONX<span>I.A.</span></span>
         </div>
         <div class="sidebar-divider"></div>
-        <span class="sidebar-caption">COMPANION</span>
-        <div class="sidebar-current" aria-current="page">
-          <span class="sidebar-current-mark" aria-hidden="true"></span>
-          <span>Partida</span>
-        </div>
+        <span class="sidebar-caption">NAVEGAÇÃO</span>
+        <nav class="sidebar-navigation" aria-label="Seções">
+          <button class="sidebar-link" type="button" data-page-target="home" aria-current="page">
+            <svg aria-hidden="true" viewBox="0 0 20 20">
+              <path d="m3 9 7-6 7 6v7.5a.5.5 0 0 1-.5.5h-13a.5.5 0 0 1-.5-.5zM8 17v-5h4v5" />
+            </svg>
+            <span>Início</span>
+          </button>
+          <button class="sidebar-link" type="button" data-page-target="match">
+            <svg aria-hidden="true" viewBox="0 0 20 20">
+              <circle cx="10" cy="10" r="7" />
+              <circle cx="10" cy="10" r="2.5" />
+              <path d="M10 1.5v3M10 15.5v3M1.5 10h3M15.5 10h3" />
+            </svg>
+            <span>Jungler Tracker</span>
+          </button>
+          <button class="sidebar-link" type="button" data-page-target="calendar">
+            <svg aria-hidden="true" viewBox="0 0 20 20">
+              <path d="M4 3.5v3M16 3.5v3M3 6.5h14v10H3zM6 10h2M10 10h2M6 13h2" />
+            </svg>
+            <span>Calendário</span>
+          </button>
+          <div class="sidebar-divider sidebar-feature-divider"></div>
+          <span class="sidebar-caption sidebar-feature-caption">FUNCIONALIDADES</span>
+          <button class="sidebar-link sidebar-feature-link" type="button" disabled aria-label="Wireless Champion Select, em breve">
+            <svg aria-hidden="true" viewBox="0 0 20 20">
+              <path d="M10 2.5 16 5v4.5c0 4-2.7 6.7-6 8-3.3-1.3-6-4-6-8V5zM7.5 9.5a2.5 2.5 0 1 1 5 0c0 2-2.5 4-2.5 4s-2.5-2-2.5-4Z" />
+            </svg>
+            <span class="sidebar-feature-label">Wireless Champion Select<small>EM BREVE</small></span>
+          </button>
+          <button class="sidebar-link sidebar-feature-link" type="button" disabled aria-label="Spells Timing, em breve">
+            <svg aria-hidden="true" viewBox="0 0 20 20">
+              <circle cx="10" cy="10" r="7" />
+              <path d="M10 5.5V10l3 2" />
+            </svg>
+            <span class="sidebar-feature-label">Spells Timing<small>EM BREVE</small></span>
+          </button>
+          <button class="sidebar-link sidebar-feature-link" type="button" disabled aria-label="Sugestão de Pick, em breve">
+            <svg aria-hidden="true" viewBox="0 0 20 20">
+              <path d="m10 2 2.2 5.1 5.5.5-4.2 3.6 1.3 5.4-4.8-2.9-4.8 2.9 1.3-5.4-4.2-3.6 5.5-.5z" />
+            </svg>
+            <span class="sidebar-feature-label">Sugestão de Pick<small>EM BREVE</small></span>
+          </button>
+        </nav>
         <div class="sidebar-bottom">
           <span class="sidebar-build">BETA · LOCAL</span>
         </div>
@@ -32,7 +89,7 @@
         <header class="topbar">
           <div class="topbar-title">
             <span class="eyebrow">LEAGUE OF LEGENDS</span>
-            <h1>Central da partida</h1>
+            <h1 id="page-title">Bem-vindo ao Bronx I.A.</h1>
           </div>
           <div class="topbar-actions">
             <span class="connection-indicator" aria-hidden="true"></span>
@@ -46,14 +103,111 @@
           </div>
         </header>
 
+        <section id="home-page" class="home-page" aria-labelledby="home-title">
+          <section class="home-hero">
+            <div class="home-hero-backdrop" aria-hidden="true"></div>
+            <div class="home-hero-copy">
+              <span class="eyebrow">IA EM DESENVOLVIMENTO · DETECÇÃO DE JUNGLER</span>
+              <p class="home-kicker">INTELIGÊNCIA TÁTICA PARA A SELVA</p>
+              <h2 id="home-title">A selva deixa<br /><span>rastros.</span></h2>
+              <p class="home-description">
+                Estamos desenvolvendo uma IA para detectar e acompanhar o jungler inimigo pelo minimapa, destacando sua última posição visível.
+              </p>
+              <div class="home-tracker-status">
+                <svg aria-hidden="true" viewBox="0 0 48 48">
+                  <path d="M24 5 11 11v10c0 10 5.5 17 13 22 7.5-5 13-12 13-22V11L24 5Z" />
+                  <circle cx="24" cy="22" r="8" />
+                  <circle cx="24" cy="22" r="2.2" />
+                  <path d="M24 10v5m0 14v5m-13-12h5m16 0h5M10 39l8-8m12-12 8-8" />
+                </svg>
+                <span><strong>JUNGLER TRACKER</strong><small>LEITURA VISUAL · PROJETO EM EVOLUÇÃO</small></span>
+                <i aria-hidden="true"></i>
+              </div>
+              <div class="home-hero-actions">
+                <button class="primary-button home-action-button" type="button" data-page-target="match">
+                  Entrar na partida <span aria-hidden="true">↗</span>
+                </button>
+                <button class="secondary-button home-calendar-button" type="button" data-page-target="calendar">
+                  Abrir calendário
+                </button>
+              </div>
+            </div>
+            <div class="home-hero-character" aria-hidden="true">
+              <div class="home-jungle-canopy"></div>
+              <div class="home-flame home-flame-one"></div>
+              <div class="home-flame home-flame-two"></div>
+              <img id="yasuo-hero-artwork" src="https://ddragon.leagueoflegends.com/cdn/img/champion/splash/Yasuo_9.jpg" alt="" />
+              <div class="home-tracker-radar">
+                <svg viewBox="0 0 420 360">
+                  <path class="radar-map-outline" d="M47 35 145 17l85 26 110-4 39 72-26 79 16 88-91 48-83-20-91 18-58-64 19-88-36-69z" />
+                  <path class="radar-map-path" d="m78 70 75 39 50 66 70 28 60 69M122 286l45-83 80-72 83-34M66 178l92-13 59-91 98 25" />
+                  <path class="radar-map-river" d="m55 221 78-40 58 7 62-71 71-5 67 24" />
+                  <circle class="radar-ring radar-ring-outer" cx="234" cy="170" r="112" />
+                  <circle class="radar-ring radar-ring-inner" cx="234" cy="170" r="68" />
+                  <path class="radar-crosshair" d="M234 43v24m0 206v24M107 170h24m206 0h24" />
+                  <path class="radar-sweep" d="M234 170 316 94" />
+                  <circle class="radar-target-halo" cx="302" cy="113" r="20" />
+                  <circle class="radar-target" cx="302" cy="113" r="6" />
+                  <circle class="radar-player-dot" cx="159" cy="235" r="4" />
+                </svg>
+                <span class="radar-target-label"><i></i> ÚLTIMA POSIÇÃO VISÍVEL</span>
+                <span class="radar-coordinate">JUNGLE TRACKING · VISUAL SCAN</span>
+              </div>
+            </div>
+            <span class="home-hero-index" aria-hidden="true">01 / 03</span>
+          </section>
+          <section class="home-feature-grid" aria-label="Acesso rápido">
+            <button class="home-feature-card" type="button" data-page-target="match">
+              <span class="home-feature-index">01</span>
+              <span class="home-feature-icon" aria-hidden="true">⌁</span>
+              <span class="home-feature-copy">
+                <strong>Jungler Tracker</strong>
+                <small>IA em desenvolvimento para detectar o jungler inimigo</small>
+              </span>
+              <span class="home-feature-arrow" aria-hidden="true">↗</span>
+            </button>
+            <button class="home-feature-card" type="button" data-page-target="calendar">
+              <span class="home-feature-index">02</span>
+              <span class="home-feature-icon" aria-hidden="true">◷</span>
+              <span class="home-feature-copy">
+                <strong>Histórico ranqueado</strong>
+                <small>Resultados, KDA e evolução por período</small>
+              </span>
+              <span class="home-feature-arrow" aria-hidden="true">↗</span>
+            </button>
+            <div class="home-feature-card home-feature-coming">
+              <span class="home-feature-index">03</span>
+              <span class="home-feature-icon" aria-hidden="true">✦</span>
+              <span class="home-feature-copy">
+                <strong>Próximas funcionalidades</strong>
+                <small>Champion Select · Spells Timing · Sugestões</small>
+              </span>
+              <span class="home-feature-soon">EM BREVE</span>
+            </div>
+          </section>
+        </section>
+
+        <div id="match-page" class="app-page" hidden>
+        <section class="match-rank-card" aria-label="Perfil ranqueado">
+          <div>
+            <span class="eyebrow">PERFIL RANQUEADO</span>
+            <strong id="match-profile-riot-id">Riot ID não cadastrado</strong>
+          </div>
+          <div class="match-rank-value">
+            <span>Elo atual</span>
+            <div class="rank-value-display">
+              <strong id="match-profile-rank-value">Elo não informado</strong>
+            </div>
+          </div>
+        </section>
         <section class="match-toolbar" aria-label="Controles da partida">
           <div>
             <span class="eyebrow">SESSÃO ATUAL</span>
-            <p>Seus alertas e informações em um só lugar.</p>
+            <p>Rastreamento do jungler e avisos de objetivos, sem previsões de posição oculta.</p>
           </div>
           <div class="controls">
             <button id="start-button" class="primary-button" type="button" disabled>
-              <span aria-hidden="true">▶</span> Iniciar leitura
+              Iniciar
             </button>
             <button id="stop-button" class="secondary-button" type="button" disabled>Encerrar</button>
           </div>
@@ -64,13 +218,13 @@
             <div>
               <span class="eyebrow">PERSONALIZAÇÃO</span>
               <h2>Voz dos alertas</h2>
-              <p>Usa vozes instaladas no Windows. A síntese acontece localmente, sem assinatura ou envio dos alertas à nuvem.</p>
+              <p>Use Piper offline ou uma voz instalada no Windows. O texto dos alertas não é enviado a serviços de voz.</p>
             </div>
-            <button id="test-voice-button" class="secondary-button" type="button">▶ Ouvir prévia</button>
+            <button id="test-voice-button" class="secondary-button" type="button">▶ Ouvir prévia / baixar</button>
           </div>
           <div class="voice-controls">
             <label class="voice-select-label" for="alert-voice-select">
-              Voz instalada
+              Voz de alertas
               <select id="alert-voice-select">
                 <option value="">Automática (Português do sistema)</option>
               </select>
@@ -90,48 +244,27 @@
         </section>
 
         <div class="dashboard-grid">
-          <section class="dashboard-card jungler-card" id="jungler-card" hidden aria-live="polite">
+          <section class="dashboard-card jungler-card" id="jungler-card" aria-live="polite">
             <div class="card-heading">
               <div>
                 <span class="eyebrow">RASTREAMENTO</span>
                 <h2>Jungler inimigo</h2>
               </div>
-              <span class="live-tag"><span></span> AO VIVO</span>
+              <div class="card-actions">
+                <button id="calibrate-minimap-button" class="text-button" type="button">Ajustar minimapa</button>
+                <span class="live-tag"><span></span> APENAS JUNGLER</span>
+              </div>
             </div>
             <div class="jungler-content">
-              <img id="jungler-portrait" alt="Retrato do jungler inimigo" />
+              <img id="jungler-portrait" alt="Retrato do jungler inimigo" hidden />
               <div class="jungler-details">
                 <strong>Localização atual</strong>
-                <span id="jungler-location">Aguardando a API local da partida.</span>
+                <span id="jungler-location">Inicie a captura para acompanhar o jungler desta partida.</span>
               </div>
             </div>
-          </section>
-
-          <section class="dashboard-card events-card">
-            <div class="card-heading">
-              <div>
-                <span class="eyebrow">ATIVIDADE</span>
-                <h2>Alertas recentes</h2>
-              </div>
-              <span class="card-count" id="event-count">0</span>
-            </div>
-            <ol id="event-list" class="event-list" aria-live="polite">
-              <li class="empty-state">Os alertas da partida aparecerão aqui.</li>
-            </ol>
-          </section>
-
-          <section id="enemy-roster" class="dashboard-card enemy-roster" hidden>
-            <div class="card-heading">
-              <div>
-                <span class="eyebrow">TIME ADVERSÁRIO</span>
-                <h2>Jogadores</h2>
-              </div>
-              <button id="calibrate-minimap-button" class="text-button" type="button">Ajustar minimapa</button>
-            </div>
-            <p id="roster-status" class="capture-status roster-status" role="status">
-              Aguardando captura para consultar a API local da partida.
+            <p id="jungler-status" class="capture-status" role="status">
+              A captura observa somente o ícone do jungler adversário.
             </p>
-            <ol id="enemy-player-list" class="enemy-player-list"></ol>
           </section>
         </div>
 
@@ -199,7 +332,175 @@
             <pre id="live-diagnostics" aria-live="polite">Aguardando captura.</pre>
           </section>
         </section>
+        </div>
+        <section id="calendar-page" class="calendar-page" aria-labelledby="calendar-heading" hidden>
+          <section class="calendar-profile-card" aria-label="Perfil Riot ID e elo">
+            <div class="calendar-profile-summary">
+              <span class="eyebrow">CONTA VINCULADA POR RIOT ID</span>
+              <strong id="calendar-profile-riot-id">Riot ID não cadastrado</strong>
+              <span class="rank-value-display">
+                <strong id="calendar-profile-rank-value">Aguardando elo da Riot</strong>
+              </span>
+              <p>O Riot ID é enviado ao serviço de sincronização do Bronx e à Riot para consulta. O histórico fica neste dispositivo; não pedimos senha da conta.</p>
+            </div>
+            <div id="calendar-connected-account" class="calendar-connected-account" hidden>
+              <span class="eyebrow">SESSÃO CONECTADA</span>
+              <strong id="calendar-connected-name"></strong>
+              <button id="calendar-disconnect" class="secondary-button" type="button">Desconectar</button>
+            </div>
+            <form id="calendar-profile-form" class="calendar-profile-form">
+              <label for="calendar-riot-name">Nome do jogo
+                <input id="calendar-riot-name" type="text" maxlength="16" autocomplete="off" placeholder="Ex.: Summoner" />
+              </label>
+              <label for="calendar-riot-tag">Tag (ex.: #BR1)
+                <input id="calendar-riot-tag" type="text" maxlength="9" autocomplete="off" placeholder="Ex.: #BR1" />
+              </label>
+              <label for="calendar-profile-platform">Servidor
+                <select id="calendar-profile-platform">
+                  <option value="BR1">Brasil (BR1)</option>
+                  <option value="NA1">América do Norte (NA1)</option>
+                  <option value="LA1">América Latina Norte (LA1)</option>
+                  <option value="LA2">América Latina Sul (LA2)</option>
+                  <option value="EUW1">Europa Oeste (EUW1)</option>
+                  <option value="EUN1">Europa Nórdica e Leste (EUN1)</option>
+                  <option value="TR1">Turquia (TR1)</option>
+                  <option value="RU">Rússia (RU)</option>
+                  <option value="KR">Coreia (KR)</option>
+                  <option value="JP1">Japão (JP1)</option>
+                  <option value="OC1">Oceania (OC1)</option>
+                  <option value="PH2">Filipinas (PH2)</option>
+                  <option value="SG2">Singapura (SG2)</option>
+                  <option value="TH2">Tailândia (TH2)</option>
+                  <option value="TW2">Taiwan (TW2)</option>
+                  <option value="VN2">Vietnã (VN2)</option>
+                </select>
+              </label>
+              <button class="secondary-button" type="submit">Salvar e sincronizar</button>
+            </form>
+            <p id="calendar-sync-warning" class="calendar-profile-warning" role="status" aria-live="polite">
+              A sincronização automática usa o serviço configurado para esta versão do aplicativo.
+            </p>
+          </section>
+          <header class="calendar-heading">
+            <div>
+              <span class="eyebrow">HISTÓRICO RANQUEADO</span>
+              <h2 id="calendar-heading">Calendário de partidas</h2>
+              <p>Configure quanto você ganha por vitória e perde por derrota para estimar o saldo. O resultado é uma estimativa pessoal.</p>
+            </div>
+            <div class="calendar-heading-actions">
+              <button id="calendar-sync-matches" class="primary-button calendar-sync-button" type="button">Sincronizar agora</button>
+            </div>
+          </header>
+          <p id="calendar-status" class="calendar-status" role="status" aria-live="polite">
+            Configure seu Riot ID para sincronizar partidas automaticamente.
+          </p>
+          <form id="calendar-pdl-settings" class="calendar-pdl-settings" aria-label="Estimativa de PDL">
+            <span>Estimativa pessoal por partida</span>
+            <label for="calendar-pdl-win">PDL por vitória
+              <input id="calendar-pdl-win" type="number" min="0" max="100" step="1" required />
+            </label>
+            <label for="calendar-pdl-loss">PDL perdido por derrota
+              <input id="calendar-pdl-loss" type="number" min="0" max="100" step="1" required />
+            </label>
+            <button class="secondary-button" type="submit">Aplicar</button>
+          </form>
+          <section class="calendar-card" aria-label="Resumo do período">
+            <div class="calendar-toolbar">
+              <div class="calendar-month-controls">
+                <button id="calendar-previous-month" class="icon-button" type="button" aria-label="Mês anterior">‹</button>
+                <h3 id="calendar-month-title" aria-live="polite"></h3>
+                <button id="calendar-next-month" class="icon-button" type="button" aria-label="Próximo mês">›</button>
+              </div>
+              <label class="calendar-period-filter" for="calendar-period">
+                Exibir
+                <select id="calendar-period">
+                  <option value="week">Semana</option>
+                  <option value="month" selected>Mês</option>
+                  <option value="year">Ano</option>
+                </select>
+              </label>
+              <button id="calendar-today" class="text-button" type="button">Hoje</button>
+            </div>
+            <div class="calendar-summary" aria-label="Totais do mês">
+              <div><span>Partidas</span><strong id="calendar-total-games">0</strong></div>
+              <div><span>Vitórias</span><strong id="calendar-total-wins" class="result-win">0</strong></div>
+              <div><span>Derrotas</span><strong id="calendar-total-losses" class="result-loss">0</strong></div>
+              <div><span id="calendar-total-pdl-label">PDL estimado</span><strong id="calendar-total-pdl">—</strong></div>
+            </div>
+            <div class="calendar-weekdays" aria-hidden="true">
+              <span>Seg</span><span>Ter</span><span>Qua</span><span>Qui</span>
+              <span>Sex</span><span>Sáb</span><span>Dom</span>
+            </div>
+            <div id="calendar-days" class="calendar-grid" role="grid" aria-label="Dias do mês"></div>
+            <div class="calendar-legend" aria-label="Legenda">
+              <span><i class="legend-win"></i>Vitória</span>
+              <span><i class="legend-loss"></i>Derrota</span>
+              <span><i class="legend-remake"></i>Remake</span>
+            </div>
+            <button id="calendar-load-older-matches" class="text-button calendar-load-older" type="button" hidden>
+              Carregar partidas anteriores
+            </button>
+          </section>
+          <details id="calendar-day-details" class="calendar-day-details">
+            <summary class="calendar-day-heading">
+              <div>
+                <span id="calendar-day-pdl-label" class="eyebrow">PARTIDAS DO DIA · PDL ESTIMADO</span>
+                <h3 id="calendar-selected-day"></h3>
+              </div>
+              <strong id="calendar-day-pdl">—</strong>
+            </summary>
+            <ol id="calendar-match-list" class="calendar-match-list"></ol>
+          </details>
+          <p class="riot-legal-disclaimer">
+            Bronx I.A. is not endorsed by Riot Games and does not reflect the views or opinions of Riot Games or anyone officially involved in producing or managing Riot Games properties. Riot Games and all associated properties are trademarks or registered trademarks of Riot Games, Inc.
+          </p>
+        </section>
       </div>
+      <dialog id="ranked-match-dialog" class="ranked-match-dialog" aria-labelledby="ranked-match-dialog-title">
+        <div class="ranked-match-dialog-heading">
+          <div>
+            <span class="eyebrow">REGISTRO LOCAL</span>
+            <h2 id="ranked-match-dialog-title">Registrar partida</h2>
+          </div>
+          <button id="ranked-match-close" class="icon-button" type="button" aria-label="Fechar">×</button>
+        </div>
+        <form id="ranked-match-form" class="ranked-match-form">
+          <input id="ranked-match-id" type="hidden" />
+          <label for="ranked-match-date">Data da partida <input id="ranked-match-date" name="date" type="date" required /></label>
+          <label for="ranked-match-result">Resultado
+            <select id="ranked-match-result" name="result" required>
+              <option value="win">Vitória</option>
+              <option value="loss">Derrota</option>
+              <option value="remake">Remake</option>
+            </select>
+          </label>
+          <label for="ranked-match-rank-before">Elo antes da partida
+            <input id="ranked-match-rank-before" name="rankBefore" type="text" maxlength="40" placeholder="Ex.: Esmeralda II" autocomplete="off" />
+          </label>
+          <label for="ranked-match-pdl-before">PDL antes
+            <input id="ranked-match-pdl-before" name="pdlBefore" type="number" min="0" max="100" step="1" placeholder="Ex.: 24" />
+          </label>
+          <label for="ranked-match-rank-after">Elo após a partida
+            <input id="ranked-match-rank-after" name="rankAfter" type="text" maxlength="40" placeholder="Ex.: Esmeralda II" autocomplete="off" />
+          </label>
+          <label for="ranked-match-pdl-after">PDL depois
+            <input id="ranked-match-pdl-after" name="pdlAfter" type="number" min="0" max="100" step="1" placeholder="Ex.: 0" />
+          </label>
+          <label for="ranked-match-champion">Campeão (opcional)
+            <select id="ranked-match-champion" name="champion">
+              <option value="">Selecione um campeão (opcional)</option>
+            </select>
+          </label>
+          <label class="ranked-match-notes" for="ranked-match-notes">Observações (opcional)
+            <textarea id="ranked-match-notes" name="notes" rows="3" maxlength="180"></textarea>
+          </label>
+          <p id="ranked-match-form-hint" class="ranked-match-form-hint">O saldo é PDL depois − PDL antes. Informe o mesmo elo/divisão nos dois campos para calcular; se o elo mudou, o saldo não é comparável. Registros antigos mantêm a variação já anotada se os novos campos ficarem vazios. Remakes não contam como vitória ou derrota.</p>
+          <div class="ranked-match-form-actions">
+            <button id="ranked-match-cancel" class="secondary-button" type="button">Cancelar</button>
+            <button id="ranked-match-save" class="primary-button" type="submit">Salvar registro</button>
+          </div>
+        </form>
+      </dialog>
       <dialog id="minimap-calibration" class="minimap-calibration">
         <form method="dialog" class="calibration-header">
           <div>

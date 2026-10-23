@@ -1,4 +1,4 @@
-# Contexto para continuar o Bronx Analytics
+# Contexto para continuar o Bronx I.A.
 
 Este documento registra o estado do projeto para retomar o trabalho em outra
 sessão. Leia-o junto com `README.md` e confira o código atual antes de alterar
@@ -24,11 +24,45 @@ tentar inferir a posição de inimigos não visíveis.
 ## Tecnologia e execução
 
 - Electron 45, TypeScript, electron-vite e Vite.
-- Nome visível: **Bronx Analytics**. O monograma original vermelho com “B”
+- Nome visível: **Bronx I.A.**. O monograma original vermelho com “B”
   está em `resources/bronx-analytics.ico` e é usado como ícone da janela.
-- A interface agora é um dashboard escuro com acentos crimson. O botão
+- A interface agora é um dashboard escuro com acentos cobre/âmbar, barra de
+  título customizada sem o menu padrão do Electron e três espaços reservados
+  na navegação para Wireless Champion Select, Spells Timing e Sugestão de Pick.
+  A arte PNG foi integrada como fundo transparente, com tipografia local do
+  sistema. O botão
   **Modo desenvolvedor** oculta/exibe o painel técnico e os controles de
   calibração sem alterar alertas sonoros; o botão interno pausa o áudio.
+- A barra lateral separa **Partida** e **Calendário**. O calendário sincroniza
+  partidas solo ranqueadas recentes com o Worker Cloudflare configurado no
+  build; o jogador não precisa fornecer a URL. Account-V1 resolve Riot ID, Match-V5 importa resultados/campeões e
+  League-V4 atualiza o elo/PDL atual. A chave fica no secret do Worker, não no
+  Electron. O app busca ao iniciar e a cada 15 minutos enquanto aberto; importa
+  até 20 partidas por página para respeitar os limites da API e deduplica por
+  Match ID. O histórico de cada partida mostra campeão, duração, K/D/A, KDA,
+  CS, ouro e dano a campeões. Os filtros semanal, mensal e anual alteram a
+  escala do calendário. Após sincronizar com sucesso, o perfil mostra o Riot
+  ID e um botão para desconectar; o histórico permanece salvo localmente.
+- A tela inicial prioriza o tracker/IA de detecção do jungler, com uma
+  visualização de radar da selva e atalhos para Partida e Calendário. A arte do
+  Yasuo fica apenas como elemento atmosférico de fundo, sem legenda de skin.
+- Match-V5 não expõe LP por partida. O resumo diário e do período exibe
+  estimativa configurável de PDL por vitória e por derrota (remakes excluídos),
+  explicitamente diferenciada do LP real. A variação individual só aparece
+  quando o app observa snapshots do mesmo elo/divisão em ambos os lados, uma
+  única nova partida e snapshot anterior com até duas horas, anterior ao fim
+  dela. Registros manuais continuam disponíveis para correções/notas;
+  armazenamento é versionado, com migração das versões 1 e 2.
+- A sincronização ainda depende da implantação do Worker e da chave Riot. O
+  usuário não tem chave atualmente; chave de desenvolvimento serve apenas para
+  teste privado, expira em 24 horas. Antes de distribuir o produto, registrar
+  Bronx I.A. no portal Riot e obter uma chave de produção aprovada.
+  O usuário pediu importação automática (não cadastro jogo a jogo) e escolheu
+  Cloudflare Workers. O app já inicia/a cada 15 min chama o Worker configurado
+  via `BRONX_RIOT_SYNC_URL` (em desenvolvimento, `localhost:8787`), importa
+  IDs/resultados/campeões ranqueados, atualiza ranque e deduplica. A versão
+  distribuível depende de deploy do Worker e secret no backend; sem endpoint
+  configurado no build a integração não retorna partidas.
 - Janela principal inicial: 1120×820, mínimo 760×620.
 - Renderer faz a captura local da imagem autorizada, Canvas, detecção visual,
   OCR local com Tesseract e interface.
@@ -39,15 +73,16 @@ tentar inferir a posição de inimigos não visíveis.
   campeões e posições dos adversários, além do lado local azul/vermelho
   necessário para rotular campos aliados/inimigos; não recebe nomes ou dados
   completos.
-- Vozes de alerta usam `SpeechSynthesisUtterance` com as vozes instaladas no
-  Windows. É grátis, local e não envia texto de alertas a um provedor de nuvem;
-  o usuário pode escolher voz, velocidade e tom. A integração paga ElevenLabs
-  foi removida. Alertas visuais continuam publicados num overlay transparente,
-  click-through.
+- Vozes de alerta podem usar `SpeechSynthesisUtterance` com as vozes instaladas
+  no Windows ou Piper pt-BR (Faber, Cadu e Jeff), com síntese no renderer via
+  ONNX/WASM. A prévia baixa explicitamente o modelo escolhido (~63 MB), fixa a
+  revisão e verifica o SHA-256 do ONNX; a voz e os alertas ficam locais. Os
+  modelos escolhidos têm cartões CC0. A integração paga ElevenLabs foi removida.
+  Alertas visuais continuam publicados num overlay transparente, click-through.
 - Ícones oficiais locais estão em `src/renderer/assets/champions/`, com
   manifesto `src/renderer/assets/champions.json` (Data Dragon 16.21.1).
 - Comandos: `npm run dev`, `npm run typecheck`, `npm run build`.
-- Workspace / repositório Git: `C:\Users\leand\generalUsage`.
+- Workspace / repositório Git: `C:\Users\leand\bronx\bronxAnalytics`.
 
 ## Como o fluxo funciona hoje
 
@@ -91,9 +126,20 @@ tentar inferir a posição de inimigos não visíveis.
 ## Arquivos principais
 
 - `src/renderer/src/main.ts`: captura, OCR do cronômetro, consulta periódica do
-  roster via IPC, correções manuais, calibração do minimapa e alertas.
-- `src/renderer/index.html`: controles, roster, diálogo de calibração do minimapa.
-- `src/renderer/src/style.css`: interface, retratos circulares e diálogo.
+  roster via IPC, correções manuais, calibração do minimapa, alertas e
+  inicialização do calendário.
+- `src/renderer/src/ranked-calendar.ts`: navegação e CRUD do calendário local,
+  sincronização automática, Riot ID/região/URL do Worker, cálculo cuidadoso de
+  delta por snapshots, ícones de campeão e migração/validação versionada.
+- `workers/riot-sync/src/index.ts`: Worker Cloudflare; resolve Riot ID, importa
+  partidas ranqueadas e consulta elo atual; lê `RIOT_API_KEY` de secret e aplica
+  rate limit por IP e cache curto de sucesso. Deploy: `npm run worker:deploy`.
+- `workers/riot-sync/wrangler.jsonc`: configuração do Worker e limite por IP.
+- `src/shared/riot-sync.ts`: contrato e lista de plataformas da sincronização.
+- `src/renderer/index.html`: navegação Partida/Calendário, formulário de
+  registro e diálogo de calibração do minimapa.
+- `src/renderer/src/style.css`: interface, calendário responsivo, retratos e
+  diálogos.
 - `src/renderer/index.html` e `src/renderer/src/style.css` também incluem
   painel de diagnóstico, formulário para anotar o resultado esperado e prévia
   do candidato encontrado no minimapa.

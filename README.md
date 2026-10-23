@@ -1,151 +1,145 @@
-# Bronx Analytics
+<div align="center">
+  <img src="src/renderer/assets/bronx-jhin.png" alt="Arte do Bronx I.A." width="720" />
+  <h1>Bronx I.A.</h1>
+  <p><strong>O companion de League of Legends focado no jungler.</strong></p>
+  <p>Posição observada no minimapa, contexto de objetivos e histórico ranqueado em uma interface desktop.</p>
+  <p><code>CARVÃO</code> · <code>COBRE</code> · <code>ÂMBAR</code></p>
+</div>
 
-Windows desktop companion built with Electron and TypeScript. The interface
-uses a dark charcoal surface with crimson accents; developer diagnostics are
-hidden until **Modo desenvolvedor** is enabled.
+---
 
-## Run locally
+## Acompanhe o que importa
+
+O Bronx I.A. combina dados locais da partida com leitura visual do
+minimapa para destacar o jungler adversário. A proposta é manter a tela
+centrada no que acontece na selva: sem alertas de desaparecimento de top,
+mid ou bot. Quando o jungler deixa de ser detectado, o overlay marca com `?`
+o último ponto observado no minimapa e informa a região por voz e na tela.
+Na tela inicial, os atalhos levam à partida e ao calendário, com destaque para
+a IA de detecção de jungler ainda em desenvolvimento.
+
+| Recurso | O que faz |
+| --- | --- |
+| **Rastreamento do jungler** | Identifica apenas o jungler pela posição informada na partida ou pelo feitiço Golpear e procura somente o retrato dele no minimapa. Os outros jogadores não são rastreados. |
+| **Posição observada** | Mostra as regiões, acampamentos e covis de objetivo onde o ícone do jungler é confirmado em leituras consecutivas, mesmo quando ele está se movendo. |
+| **Última posição observada** | Após duas leituras consecutivas sem detectar o jungler, exibe um `?` no ponto em que ele foi visto pela última vez e avisa na tela e por voz. O marcador é removido quando ele volta a ser detectado. |
+| **Contexto de gank** | Ao detectar o jungler numa rota, sinaliza uma possibilidade — nunca afirma que um gank vai acontecer. |
+| **Objetivos** | Informa a aproximação do surgimento das Vastilarvas e destaca quando o jungler é observado perto de um covil. |
+| **Calendário ranqueado** | Importa partidas solo ranqueadas automaticamente e reúne resultados e snapshots de elo/PDL. |
+| **Voz local** | Piper em português brasileiro ou vozes instaladas no Windows; se o modelo Piper ainda não estiver instalado, os alertas usam uma voz pt-BR disponível no sistema. Os alertas não são enviados a serviços de voz. |
+
+> **Em desenvolvimento:** a leitura do minimapa usa o retrato do campeão e
+> regiões geométricas aproximadas. Escala, qualidade de imagem e ícones
+> sobrepostos podem causar falhas. O marcador representa somente a última
+> posição visualmente confirmada; não estima movimentos ou posições ocultas.
+
+Os itens **Wireless Champion Select**, **Spells Timing** e **Sugestão de Pick**
+na navegação são apenas espaços reservados para futuras funcionalidades e
+permanecem desativados.
+
+## Começar
+
+Requer Windows, Node.js e npm. Na pasta do projeto:
 
 ```powershell
 npm install
 npm run dev
 ```
 
-`npm run build` creates a production build, and `npm run typecheck` checks the
-main, preload, and renderer TypeScript code.
+Para verificar tipos e gerar a versão de produção:
 
-## Current scope
+```powershell
+npm run typecheck
+npm run build
+```
 
-The app searches desktop window titles for `League of Legends (TM) Client` on
-startup and retries while none is available. If exactly one matching window
-is found, it selects it automatically; if several match, it selects the first
-and reports that choice. Capture begins only after the user presses Start.
-The dashboard presents capture controls, recent alerts, the opponent roster,
-and the detected jungler. Technical diagnostics and manual calibration tools
-are hidden until **Modo desenvolvedor** is enabled; this switch does not pause
-alert audio. Within developer mode, audio can be paused separately.
-Alert speech can be customized independently: choose an installed system voice,
-adjust its rate and pitch, and preview it. Preferences are stored locally on
-the device; the available voices depend on Windows speech settings. Speech is
-provided locally by Windows and alert text is not sent to a voice service.
-Next session priorities are tracked in:
-[`TODO-PROXIMA-SESSAO.md`](./TODO-PROXIMA-SESSAO.md).
-The minimap region is estimated from its standard bottom-right placement. The
-renderer automatically looks for red pixel components inside that region and
-assigns them to top, mid, or bot using their position: a diagonal band is mid,
-while candidates outside it are assigned top or bot by whether they are in the
-upper or lower half of the minimap. After a lane has been observed, a stable
-drop in its marker count starts a timer; if it remains absent for more than
-five seconds, the companion announces that the lane's enemy laner disappeared
-and shows the elapsed time in the alert list. Image processing is limited to
-the estimated minimap region and sampled at four frames per second.
-This color/geometry heuristic does not identify champions or understand game
-state; red UI elements, effects, scaling, and map orientation can cause false
-matches or missed detections. It only reports visible markers and does not
-predict positions after they disappear. Alerts appear in the companion window
-and, during active capture, in the separate overlay. The app does not modify
-the game. Frames stay in the local renderer and are not uploaded. Do not rely
-on this prototype for accurate in-game alerts.
+Abra o League of Legends e entre em uma partida. O app procura a janela do
+jogo; pressione **Iniciar** para autorizar a captura visível. A captura
+e a análise do minimapa acontecem localmente, e a captura termina pelo botão
+**Encerrar**.
 
-## Local match diagnostics
+## Calendário e Riot ID
 
-Turn on **Diagnóstico** before capture or during a match to pause speech while
-keeping visual overlay alerts active. The panel shows the actual captured
-frame dimensions, Live Client API roster status,
-current capture profile, minimap crop bounds, lane marker counts and watch
-timers, and the last minimap match status and scores. The minimap preview marks
-the latest candidate even when it is rejected as ambiguous or low-confidence.
-The **Salvar amostra diagnóstica** button is available during capture without
-enabling diagnostic mode; this lets you collect a sample while alerts remain
-active.
+Na página **Calendário**, informe seu Riot ID (`Nome#TAG`) e plataforma. O app
+consulta partidas ranqueadas pela API oficial da Riot por meio do serviço de
+sincronização do Bronx; não é necessário informar um endereço de Worker. O
+aplicativo não pede senha da Riot.
 
-Before saving a sample, enter the expected jungler champion and the zone you
-observe in the visible game (or choose "Não visível"). Click **Salvar amostra
-diagnóstica** and choose a local folder. The app writes a timestamped directory
-with `manifest.json`, the full captured frame, the calibrated minimap crop,
-and the current roster from the local match API. Saving is an explicit user
-action; no frames are uploaded or saved automatically. Use samples from one
-match to calibrate, then collect separate matches to measure false alerts,
-misses, and location accuracy.
+Cada consulta busca até 20 partidas solo ranqueadas para respeitar os limites
+da API da Riot. Se houver mais histórico, use **Carregar partidas anteriores**
+para buscar páginas mais antigas. Selecione um dia no calendário para expandir
+os jogos daquela data, com campeão, horário, duração, K/D/A, KDA, CS, ouro e
+dano a campeões. Os filtros semanal, mensal e anual alternam a escala do
+calendário; na visão anual, selecione um mês para detalhá-lo.
 
-During active capture, a separate transparent, click-through overlay displays
-each new alert near the top-left of the primary display for seven seconds. It
-does not take focus or intercept mouse/keyboard input, and it is hidden when
-capture stops. Use borderless-window mode; exclusive fullscreen may draw above
-the overlay. The overlay is attached to the primary display and can remain
-visible over other apps while capture is active.
+O PDL exibido como saldo diário e do período é uma estimativa configurável:
+informe o PDL ganho por vitória e o perdido por derrota; remakes não entram na
+conta. O ganho real varia por partida e a Riot não fornece esse valor no
+histórico. Variações individuais só são exibidas quando podem ser observadas
+por snapshots de elo.
+Após uma sincronização bem-sucedida, o perfil mostra o Riot ID conectado e um
+botão **Desconectar**. Desconectar remove o vínculo e mantém o histórico local.
 
-The companion reads the visible game clock locally with Tesseract OCR. It
-checks compact, overlapping crops around the upper-right timer and reports
-the raw OCR text and confidence in diagnostic mode and saved samples. The
-clock parser can extract a time even when OCR also picks up nearby HUD digits.
-Lane-marker detection and missing-laner alerts wait until 01:20, when the
-clock activates lane tracking; this avoids treating the initial absence of
-lane opponents as a missing-player alert. Jungler minimap scans start as soon
-as the API identifies a jungler and do not depend on OCR recognizing the
-clock. Lane-marker detection uses the same calibrated minimap crop and alerts
-when the red-marker count in a lane drops after that lane has been seen. It is
-an aggregate lane signal, not yet reliable identification of a specific
-champion disappearing. No TAB action is required.
-Clock and minimap heuristics are experimental and may fail depending on
-resolution, HUD scale, and image quality. The companion warns when Void Grubs
-are due to spawn at 08:00, starting at 07:00; if detection starts later, the
-warning reports the remaining time when the grubs have not spawned yet.
+O app não inclui uma chave Riot. Para habilitar sincronização:
 
-Diagnostic mode pauses speech while keeping visual overlay alerts active. It
-starts disabled each time the app opens, and adjusting the minimap does not
-enable it.
+1. Crie uma chave de desenvolvimento no [Riot Developer Portal](https://developer.riotgames.com/).
+2. Configure o Worker em `workers/riot-sync`; para desenvolvimento local, crie
+   `workers/riot-sync/.dev.vars` com `RIOT_API_KEY=<sua-chave>`.
+3. Execute `npm run worker:dev` para testar localmente ou faça login no
+   Cloudflare, configure `RIOT_API_KEY` como secret e publique com
+   `npm run worker:deploy`.
+4. Ao criar uma versão distribuível, defina `BRONX_RIOT_SYNC_URL` como a URL
+   HTTPS do Worker antes de executar `npm run build`. No PowerShell:
 
-The opponent roster comes from the documented local Game Client API endpoint
-`https://127.0.0.1:2999/liveclientdata/allgamedata`. The app filters out the
-active player's team and uses each opponent's champion and `position` fields.
-It polls only while capture is active, sends no player data off-device, and
-does not require a Riot API key. Riot's root certificate is used to validate
-the local HTTPS connection; certificate verification is not disabled. If the
-API omits or duplicates a position, the roster marks it as unknown and does not
-track that player as jungler until the user corrects the lane. A temporary API
-failure is shown in the roster status.
+   ```powershell
+   $env:BRONX_RIOT_SYNC_URL = 'https://seu-worker.workers.dev'
+   npm run build
+   ```
 
-The API identifies players and lanes but does not return their map coordinates.
-For minimap tracking, the app uses the local Data Dragon champion icon (version
-16.21.1) as the visual template and analyzes only the visible minimap. This
-match is experimental and may fail with minimap scaling, overlapping icons, or
-low image detail; it does not infer a hidden enemy position. The roster's lane
-selector remains available for manual corrections, which are kept while the
-match API continues updating.
+   O endereço fica configurado na versão do app, não é solicitado aos jogadores
+   e não é um segredo. Uma compilação de distribuição sem essa variável não terá
+   sincronização habilitada. Em desenvolvimento, o app usa
+   `http://localhost:8787` quando a variável não está definida.
 
-The minimap search scales expected icon size to the calibrated minimap bounds.
-Use **Ajustar minimapa** to move and resize that area; its calibration is cached
-separately for each captured frame resolution. After two stable, confident
-matches, the app announces transitions between approximate map regions:
-upper/middle/lower river, top/mid/bottom lane, Baron and Dragon pits, and the
-Blue, Red, Gromp, Wolves, Raptors, and Krugs camps on either map side. Camp and
-base alerts are labeled allied or enemy based on the player's team from the
-local match API. Region boundaries are geometric estimates from normalized
-minimap coordinates, not game-provided coordinates; validate them in a live
-match and treat ambiguous or low-confidence portrait matches as inconclusive.
-The tracker only reports a jungler portrait currently visible on the minimap;
-it does not estimate a hidden position. Lane disappearance alerts require an
-identified champion and are deferred while that champion's portrait is still
-recognized on the minimap.
+Chaves de desenvolvimento expiram e não servem para uma distribuição pública.
+Antes de publicar o produto, siga os requisitos de registro e aprovação da
+Riot. Nunca coloque uma chave em arquivos do renderer, preload, builds ou no
+repositório.
 
-The Game Client API is available only to native applications and uses a local
-self-signed HTTPS certificate. Riot requires products to be registered and
-their Game Client API use to be documented; read the current policies before
-distribution. Do not disable certificate verification or use the API to reveal
-information that is not available through normal gameplay.
-Zone classification checks the mid diagonal before outer-lane areas and uses
-the map diagonal to distinguish the two river sides, avoiding the earlier
-left/right comparison that could label bot-side positions as top.
+A API de partidas não fornece o PDL histórico de cada jogo. O calendário só
+associa uma variação de PDL quando existem snapshots observados antes e depois
+da partida, sob as condições de consistência implementadas. Quando não há
+dados suficientes, a variação fica indisponível em vez de ser estimada.
+O elo é exibido em texto; emblemas ranqueados só serão adicionados a partir de
+uma fonte de assets autorizada pela Riot.
 
-Do not read game memory, inject into the client, automate gameplay, or infer a
-hidden enemy position. Check Riot Games' current policies and registration
-requirements before distributing the app or adding other data sources.
+## Privacidade e limites
 
-## References
+- Frames de jogo e dados da API local ficam no dispositivo; imagens só são
+  exportadas quando você solicita uma amostra diagnóstica.
+- O Riot ID e a plataforma são enviados ao serviço de sincronização configurado
+  para a consulta.
+  A chave da Riot permanece como secret do Worker, fora do aplicativo desktop.
+- A detecção visual é experimental e reporta apenas sinais observáveis na tela.
+  Ela não lê memória, não injeta código no cliente e não automatiza gameplay.
+- Diagnósticos e ajustes do minimapa ficam disponíveis no modo desenvolvedor.
 
-- [Riot Games Developer Policies](https://developer.riotgames.com/policies/general)
-- [League of Legends Developer Documentation](https://developer.riotgames.com/docs/lol)
-- [Riot Data Dragon champion catalog](https://ddragon.leagueoflegends.com/cdn/16.21.1/data/en_US/champion.json)
-- [PanSen Panel](https://github.com/jimmybytes/pansen-panel) is an independent
-  Electron/JavaScript example, not an endorsement or evidence of Riot approval.
+O uso da API local e a distribuição do produto estão sujeitos às políticas
+atuais da Riot Games. Bronx I.A. não é endossado pela Riot Games e não
+reflete as opiniões da Riot Games nem de qualquer pessoa oficialmente
+envolvida na produção ou gestão de propriedades da Riot Games. Riot Games e
+todas as propriedades associadas são marcas comerciais ou marcas registradas
+da Riot Games, Inc.
+
+## Tecnologias e referências
+
+- Electron, TypeScript e Vite
+- [Documentação das APIs de League of Legends](https://developer.riotgames.com/docs/lol)
+- [Políticas para desenvolvedores Riot](https://developer.riotgames.com/policies/general)
+- [Piper — vozes pt-BR](https://huggingface.co/rhasspy/piper-voices)
+
+---
+
+<div align="center">
+  <sub>Construído para manter o foco na selva. Posição observada, não adivinhada.</sub>
+</div>

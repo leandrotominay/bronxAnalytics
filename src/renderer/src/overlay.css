@@ -18,6 +18,10 @@ body {
   background: transparent;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 .overlay {
   display: flex;
   align-items: flex-start;
@@ -50,4 +54,74 @@ body {
 .overlay-alert.is-visible {
   opacity: 1;
   transform: translateX(0);
+}
+
+.overlay-last-seen-marker {
+  position: fixed;
+  z-index: 1;
+  display: grid;
+  width: var(--marker-size);
+  height: var(--marker-size);
+  place-items: center;
+  border: 2px solid #ff4b35;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 40%, #ffbd46 0%, #ed652c 44%, #6f1b1b 100%);
+  box-shadow:
+    0 0 9px rgb(255 177 49 / 95%),
+    0 0 18px rgb(239 53 55 / 85%),
+    inset 0 0 7px rgb(255 238 171 / 65%);
+  color: #fff8e7;
+  font-size: calc(var(--marker-size) * 0.72);
+  font-weight: 850;
+  line-height: 1;
+  text-shadow: 0 0 7px #aa1717, 0 0 3px #6d1711;
+  transform: translate(-50%, -50%);
+  animation: last-seen-marker-pulse 1s ease-in-out infinite;
+}
+
+.overlay-last-seen-marker::before,
+.overlay-last-seen-marker::after {
+  position: absolute;
+  inset: -4px;
+  border: 2px solid #ffae32;
+  border-radius: inherit;
+  content: "";
+  pointer-events: none;
+  animation: last-seen-marker-ring 1.6s ease-out infinite;
+}
+
+.overlay-last-seen-marker::after {
+  border-color: #f0443c;
+  animation-delay: 800ms;
+}
+
+@keyframes last-seen-marker-pulse {
+  0%,
+  100% {
+    box-shadow:
+      0 0 7px rgb(255 177 49 / 75%),
+      0 0 12px rgb(239 53 55 / 65%),
+      inset 0 0 6px rgb(255 238 171 / 45%);
+    filter: brightness(0.94);
+  }
+
+  50% {
+    box-shadow:
+      0 0 12px rgb(255 195 60 / 100%),
+      0 0 24px rgb(239 53 55 / 100%),
+      inset 0 0 9px rgb(255 246 198 / 85%);
+    filter: brightness(1.16);
+  }
+}
+
+@keyframes last-seen-marker-ring {
+  0% {
+    opacity: 0.9;
+    transform: scale(0.82);
+  }
+
+  100% {
+    opacity: 0;
+    transform: scale(1.8);
+  }
 }

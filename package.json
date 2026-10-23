@@ -1,6 +1,6 @@
 {
-  "name": "bronx-analytics",
-  "productName": "Bronx Analytics",
+  "name": "bronx-ia",
+  "productName": "Bronx I.A.",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -9,17 +9,24 @@
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
-    "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json"
+    "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json && npm run worker:typecheck",
+    "worker:dev": "wrangler dev --config workers/riot-sync/wrangler.jsonc",
+    "worker:deploy": "wrangler deploy --config workers/riot-sync/wrangler.jsonc",
+    "worker:typecheck": "tsc --noEmit --strict --skipLibCheck --target ES2022 --module ESNext --moduleResolution Bundler --lib ES2022,DOM workers/riot-sync/src/index.ts"
   },
   "devDependencies": {
     "@types/node": "^22.15.30",
     "electron": "^45.0.0",
     "electron-vite": "^4.0.0",
     "typescript": "^5.8.3",
-    "vite": "^6.3.5"
+    "vite": "^6.3.5",
+    "wrangler": "^4.152.0"
   },
   "dependencies": {
+    "@diffusionstudio/piper-wasm": "^1.0.0",
+    "@mintplex-labs/piper-tts-web": "^1.0.5",
     "@tesseract.js-data/eng": "^1.0.0",
+    "onnxruntime-web": "^1.18.0",
     "tesseract.js": "^7.0.0"
   }
 }

@@ -1,7 +1,7 @@
 import { request } from 'node:https'
 import type {
-  LiveClientRosterPlayer,
-  LiveClientRosterResult
+  LiveClientJungler,
+  LiveClientJunglerResult
 } from '../shared/live-client-data'
 import { riotGamesRootCertificate } from './riotgames-certificate'
 
@@ -17,8 +17,22 @@ function normalizeIdentifier(value: unknown): string | null {
   return value.trim().toLocaleLowerCase()
 }
 
+function playerHasSmite(player: Record<string, unknown>): boolean {
+  if (!isRecord(player.summonerSpells)) return false
+  return Object.values(player.summonerSpells).some(
+    (spell) =>
+      isRecord(spell) &&
+      Object.entries(spell).some(
+        ([key, value]) =>
+          /displayname|description/i.test(key) &&
+          typeof value === 'string' &&
+          /smite|golpear/i.test(value)
+      )
+  )
+}
+
 type ParsedLiveClientMatch = {
-  players: LiveClientRosterPlayer[]
+  jungler: LiveClientJungler | null
   ownTeamSide: 'blue' | 'red'
 }
 
@@ -69,34 +83,50 @@ function parseLiveClientMatch(data: unknown): ParsedLiveClientMatch {
   }
 
   const enemyRows = allPlayers.filter(
-    (player) => isRecord(player) && player.team !== ownTeam
+    (player): player is Record<string, unknown> =>
+      isRecord(player) && player.team !== ownTeam
   )
   if (enemyRows.length === 0) {
     throw new Error('A API local não retornou jogadores do time inimigo.')
   }
 
-  const players = enemyRows.map((player, index) => {
-    if (
-      !isRecord(player) ||
-      typeof player.championName !== 'string' ||
-      player.championName.trim().length === 0
-    ) {
-      throw new Error(`A API local não informou o campeão do oponente ${index + 1}.`)
-    }
-    return {
-      id: `enemy-player-${index}`,
-      championName: player.championName.trim(),
-      position: typeof player.position === 'string' ? player.position.trim() : ''
-    }
-  })
+  const laneCandidates = enemyRows.filter(
+    (player) =>
+      typeof player.position === 'string' &&
+      player.position.trim().toLocaleUpperCase() === 'JUNGLE'
+  )
+  const smiteCandidates = enemyRows.filter(playerHasSmite)
+  const identifiedByPosition = laneCandidates.length === 1
+  const junglerRecord = identifiedByPosition
+    ? laneCandidates[0]
+    : smiteCandidates.length === 1
+      ? smiteCandidates[0]
+      : null
+  if (
+    junglerRecord &&
+    (typeof junglerRecord.championName !== 'string' ||
+      junglerRecord.championName.trim().length === 0)
+  ) {
+    throw new Error('A API local não informou o campeão do jungler adversário.')
+  }
+  const junglerName =
+    junglerRecord && typeof junglerRecord.championName === 'string'
+      ? junglerRecord.championName.trim()
+      : null
   return {
-    players,
+    jungler: junglerRecord && junglerName
+      ? {
+        championName: junglerName,
+        hasSmite: playerHasSmite(junglerRecord),
+          source: identifiedByPosition ? 'position' : 'smite'
+        }
+      : null,
     ownTeamSide: ownTeam === 'ORDER' ? 'blue' : 'red'
   }
 }
 
-export function parseLiveClientRoster(data: unknown): LiveClientRosterPlayer[] {
-  return parseLiveClientMatch(data).players
+export function parseLiveClientJungler(data: unknown): LiveClientJungler | null {
+  return parseLiveClientMatch(data).jungler
 }
 
 function requestGameData(): Promise<unknown> {
@@ -147,7 +177,7 @@ function requestGameData(): Promise<unknown> {
   })
 }
 
-export async function readLiveClientRoster(): Promise<LiveClientRosterResult> {
+export async function readLiveClientJungler(): Promise<LiveClientJunglerResult> {
   try {
     const gameData = await requestGameData()
     return { status: 'available', ...parseLiveClientMatch(gameData) }

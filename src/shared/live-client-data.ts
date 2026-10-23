@@ -1,13 +1,13 @@
-export type LiveClientRosterPlayer = {
-  id: string
+export type LiveClientJungler = {
   championName: string
-  position: string
+  hasSmite: boolean
+  source: 'position' | 'smite'
 }
 
-export type LiveClientRosterResult =
+export type LiveClientJunglerResult =
   | {
       status: 'available'
-      players: LiveClientRosterPlayer[]
+      jungler: LiveClientJungler | null
       ownTeamSide: 'blue' | 'red'
     }
   | { status: 'unavailable'; message: string }

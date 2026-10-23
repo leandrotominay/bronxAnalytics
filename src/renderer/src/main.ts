@@ -1,7 +1,16 @@
 /// <reference types="vite/client" />
 
 import championCatalog from '../assets/champions.json'
-import type { LiveClientRosterResult } from '../../shared/live-client-data'
+import type { LiveClientJunglerResult } from '../../shared/live-client-data'
+import type { OverlayMarker } from '../../shared/overlay'
+import type { RiotSyncRequest, RiotSyncResponse } from '../../shared/riot-sync'
+import {
+  classifyJungleZone,
+  formatJungleZone,
+  type JungleZone,
+  type MapSide
+} from './jungle-zones'
+import { initializeRankedCalendar } from './ranked-calendar'
 
 export {}
 
@@ -9,13 +18,19 @@ declare global {
   interface Window {
     companion: {
       version: string
+      minimizeWindow: () => Promise<void>
+      toggleMaximizeWindow: () => Promise<boolean>
+      closeWindow: () => Promise<void>
       setOverlayActive: (active: boolean) => Promise<void>
+      setOverlayMarker: (marker: OverlayMarker | null) => Promise<void>
       publishOverlayAlert: (title: string) => void
       notifyOverlayReady: () => void
+      onOverlayMarker: (callback: (marker: OverlayMarker | null) => void) => () => void
       onOverlayAlert: (callback: (title: string) => void) => () => void
       findLeagueWindows: () => Promise<Array<{ id: string; name: string }>>
       selectLeagueWindow: (sourceId: string) => Promise<boolean>
-      readLiveClientRoster: () => Promise<LiveClientRosterResult>
+      readLiveClientJungler: () => Promise<LiveClientJunglerResult>
+      syncRiotRankedMatches: (request: RiotSyncRequest) => Promise<RiotSyncResponse>
       initializeGameOcr: () => Promise<boolean>
       readGameClock: (image: Uint8Array) => Promise<{ text: string; confidence: number }>
       saveDiagnosticSample: (sample: {
@@ -28,8 +43,10 @@ declare global {
   }
 }
 
-const eventList = document.querySelector<HTMLOListElement>('#event-list')
-const eventCount = document.querySelector<HTMLElement>('#event-count')
+const windowTitlebar = document.querySelector<HTMLElement>('.window-titlebar')
+const minimizeWindowButton = document.querySelector<HTMLButtonElement>('#window-minimize')
+const maximizeWindowButton = document.querySelector<HTMLButtonElement>('#window-maximize')
+const closeWindowButton = document.querySelector<HTMLButtonElement>('#window-close')
 const startButton = document.querySelector<HTMLButtonElement>('#start-button')
 const stopButton = document.querySelector<HTMLButtonElement>('#stop-button')
 const screenCanvas = document.querySelector<HTMLCanvasElement>('#screen-canvas')
@@ -37,9 +54,7 @@ const status = document.querySelector<HTMLParagraphElement>('#status')
 const junglerCard = document.querySelector<HTMLElement>('#jungler-card')
 const junglerPortraitImage = document.querySelector<HTMLImageElement>('#jungler-portrait')
 const junglerLocationText = document.querySelector<HTMLElement>('#jungler-location')
-const enemyRoster = document.querySelector<HTMLElement>('#enemy-roster')
-const rosterStatus = document.querySelector<HTMLElement>('#roster-status')
-const enemyPlayerList = document.querySelector<HTMLOListElement>('#enemy-player-list')
+const junglerStatus = document.querySelector<HTMLElement>('#jungler-status')
 const calibrateMinimapButton = document.querySelector<HTMLButtonElement>(
   '#calibrate-minimap-button'
 )
@@ -77,8 +92,10 @@ const diagnosticMinimapCanvas = document.querySelector<HTMLCanvasElement>(
 )
 
 if (
-  !eventList ||
-  !eventCount ||
+  !windowTitlebar ||
+  !minimizeWindowButton ||
+  !maximizeWindowButton ||
+  !closeWindowButton ||
   !startButton ||
   !stopButton ||
   !screenCanvas ||
@@ -86,9 +103,7 @@ if (
   !junglerCard ||
   !junglerPortraitImage ||
   !junglerLocationText ||
-  !enemyRoster ||
-  !rosterStatus ||
-  !enemyPlayerList ||
+  !junglerStatus ||
   !calibrateMinimapButton ||
   !minimapCalibrationDialog ||
   !calibrationPreview ||
@@ -118,8 +133,6 @@ if (
   throw new Error('Required companion UI elements were not found.')
 }
 
-const events = eventList
-const eventCountElement = eventCount
 const screen = screenCanvas
 const captureStatus = status
 const startCaptureButton = startButton
@@ -127,9 +140,7 @@ const stopCaptureButton = stopButton
 const jungleCard = junglerCard
 const junglePortrait = junglerPortraitImage
 const jungleLocation = junglerLocationText
-const roster = enemyRoster
-const rosterStatusElement = rosterStatus
-const playerList = enemyPlayerList
+const junglerStatusElement = junglerStatus
 const calibrationCanvas = calibrationPreview
 const calibrationDialog = minimapCalibrationDialog
 const calibrateMinimapControl = calibrateMinimapButton
@@ -154,6 +165,34 @@ const expectedZoneControl = expectedZoneSelect
 const diagnosticStatusElement = diagnosticStatus
 const liveDiagnosticsElement = liveDiagnostics
 const diagnosticMinimapPreview = diagnosticMinimapCanvas
+
+function runWindowControl(action: () => Promise<unknown>): void {
+  void action().catch((error: unknown) => {
+    console.error('Could not apply the requested window control.', error)
+    setStatus('Não foi possível alterar a janela.')
+  })
+}
+
+minimizeWindowButton.addEventListener('click', () => {
+  runWindowControl(() => window.companion.minimizeWindow())
+})
+
+maximizeWindowButton.addEventListener('click', () => {
+  runWindowControl(async () => {
+    const maximized = await window.companion.toggleMaximizeWindow()
+    maximizeWindowButton.setAttribute('aria-label', maximized ? 'Restaurar janela' : 'Maximizar janela')
+    document.body.classList.toggle('window-maximized', maximized)
+  })
+})
+
+closeWindowButton.addEventListener('click', () => {
+  runWindowControl(() => window.companion.closeWindow())
+})
+
+windowTitlebar.addEventListener('dblclick', (event) => {
+  if ((event.target as HTMLElement).closest('.window-titlebar-controls')) return
+  maximizeWindowButton.click()
+})
 const diagnosticMinimapContext = diagnosticMinimapPreview.getContext('2d')
 if (!diagnosticMinimapContext) throw new Error('Could not initialize minimap diagnostics preview.')
 const diagnosticMapContext = diagnosticMinimapContext
@@ -192,61 +231,51 @@ const championImageUrls = import.meta.glob<string>('../assets/champions/*.png', 
 
 type Point = { x: number; y: number }
 type Region = { left: number; top: number; right: number; bottom: number }
-type Lane = 'top' | 'mid' | 'bot'
-type TeamLane = 'top' | 'jungle' | 'mid' | 'adc' | 'support'
-type LaneSource = 'api' | 'manual' | 'unknown'
-type MapSide = 'blue' | 'red'
 type AlertVoicePreferences = { voiceURI: string; rate: number; pitch: number }
-type JungleCamp = 'blue-buff' | 'red-buff' | 'wolves' | 'raptors' | 'gromp' | 'krugs'
-type JungleZone =
-  | 'baron-pit'
-  | 'dragon-pit'
-  | 'river-top'
-  | 'river-mid'
-  | 'river-bot'
-  | 'mid-lane'
-  | 'top-lane'
-  | 'bot-lane'
-  | 'blue-base'
-  | 'red-base'
-  | `camp:${MapSide}:${JungleCamp}`
-  | `jungle:${MapSide}`
+const piperVoiceLabels = {
+  'pt_BR-faber-medium': 'Faber',
+  'pt_BR-cadu-medium': 'Cadu',
+  'pt_BR-jeff-medium': 'Jeff'
+} as const
+type PiperVoiceId = keyof typeof piperVoiceLabels
+class VoiceSelectionChangedError extends Error {
+  constructor() {
+    super('A voz selecionada foi alterada.')
+    this.name = 'AbortError'
+  }
+}
+type VoiceWorkerRequest =
+  | { type: 'prepare'; requestId: number; voiceId: PiperVoiceId; allowDownload: boolean }
+  | { type: 'synthesize'; requestId: number; voiceId: PiperVoiceId; text: string }
+type VoiceEngineRequest =
+  | { type: 'prepare'; allowDownload: boolean }
+  | { type: 'synthesize'; text: string }
+type VoiceWorkerResponse =
+  | { type: 'progress'; requestId: number; loaded: number; total: number }
+  | { type: 'ready'; requestId: number }
+  | { type: 'audio'; requestId: number; blob: Blob }
+  | { type: 'error'; requestId: number; message: string }
 type ChampionDefinition = { id: string; name: string }
 type ChampionTemplate = ChampionDefinition & { url: string }
 type MinimapCrop = { x: number; y: number; size: number }
 type MinimapScanDiagnostics = {
   status: 'not-run' | 'no-red-ring' | 'no-valid-match' | 'score-too-high' | 'ambiguous' | 'found'
   point: Point | null
+  iconSize: number | null
   zone: JungleZone | null
   bestScore: number | null
   runnerUpScore: number | null
   redRingSamples: number
 }
-type EnemyPlayer = {
-  id: string
-  lane: TeamLane
-  laneSource: LaneSource
-  championId: string | null
-  championName: string | null
-  portrait: ImageData | null
-  portraitUrl: string | null
+type JunglerTarget = {
+  championId: string
+  championName: string
+  portrait: ImageData
+  portraitUrl: string
 }
-type EnemyMarker = { center: Point; lane: Lane }
-type LaneWatch = {
-  hasBeenSeen: boolean
-  lastVisibleCount: number
-  missingSince: number | null
-  alertCard: HTMLLIElement | null
-  alerted: boolean
-}
-
-const minimumMarkerPixels = 3
-const laneBoundary = 0.14
-const laneCountDebounceFrames = 3
-const missingAlertDelay = 5000
-const missingLaneMinimapScanInterval = 1000
-const laneDetectionStartTime = 80
 const jungleScanInterval = 1000
+const jungleMatchConfirmationScans = 3
+const jungleMatchPositionTolerance = 0.045
 const liveClientPollInterval = 2500
 const voidGrubAlertTime = 7 * 60
 const voidGrubSpawnTime = 8 * 60
@@ -260,51 +289,13 @@ const minimapRingSamplePoints = [
   [0.2, 0.8],
   [0.8, 0.8]
 ]
-const jungleMatchMaximumScore = 0.13
-const jungleMatchMinimumMargin = 0.02
-const jungleMatchMinimumRingSamples = 4
-const junglePositionStabilityRadius = 0.04
-const teamLaneOrder: TeamLane[] = ['top', 'jungle', 'mid', 'adc', 'support']
+const jungleMatchMaximumScore = 0.17
+const jungleMatchMinimumMargin = 0.015
+const jungleMatchMinimumRingSamples = 3
 const minimapCropStorageKey = 'league-event-companion.minimap-crops.v1'
 const alertVoiceStorageKey = 'bronx-analytics.alert-voice.v1'
-const teamLaneLabels: Record<TeamLane, string> = {
-  top: 'TOP',
-  jungle: 'JUNGLE',
-  mid: 'MID',
-  adc: 'ADC',
-  support: 'SUPORTE'
-}
-let enemyMarkers: EnemyMarker[] = []
-let stableLaneCounts: Record<Lane, number> | null = null
-let pendingLaneCounts: Record<Lane, number> | null = null
-let pendingLaneCountsSince = 0
-let laneCountFrames = 0
-const laneWatches: Record<Lane, LaneWatch> = {
-  top: {
-    hasBeenSeen: false,
-    lastVisibleCount: 0,
-    missingSince: null,
-    alertCard: null,
-    alerted: false
-  },
-  mid: {
-    hasBeenSeen: false,
-    lastVisibleCount: 0,
-    missingSince: null,
-    alertCard: null,
-    alerted: false
-  },
-  bot: {
-    hasBeenSeen: false,
-    lastVisibleCount: 0,
-    missingSince: null,
-    alertCard: null,
-    alerted: false
-  }
-}
 let stream: MediaStream | null = null
 let video: HTMLVideoElement | null = null
-let region: Region | null = null
 let timer: number | null = null
 let selectedWindowId: string | null = null
 let discoveryTimer: number | null = null
@@ -314,8 +305,6 @@ let clockReadInProgress = false
 let clockReaderReady = false
 let rosterRefreshTimer: number | null = null
 let rosterRefreshInProgress = false
-let laneDetectionEnabled = false
-let rosterPromptAnnounced = false
 let voidGrubAlertAnnounced = false
 let lastRecognizedClock: number | null = null
 let stableClockCandidate: number | null = null
@@ -332,17 +321,15 @@ let ownTeamSide: MapSide | null = null
 let lastJungleScanAt = 0
 let jungleScanInProgress = false
 let pendingJungleZone: JungleZone | null = null
-let pendingJungleZoneScans = 0
 let pendingJunglePoint: Point | null = null
+let pendingJungleZoneScans = 0
 let announcedJungleZone: JungleZone | null = null
 let lastConfirmedJungleZone: JungleZone | null = null
+let lastConfirmedJungleMarker: OverlayMarker | null = null
+let jungleDisappearanceAnnounced = false
 let jungleMissedScans = 0
-let enemyPlayers: EnemyPlayer[] = []
-let draggedEnemyPlayerId: string | null = null
+let trackedJungler: JunglerTarget | null = null
 let jungleCaptureAnnounced = false
-let activeJunglerPlayerId: string | null = null
-let enemyDetectionAnnounced = false
-let lastMissingLaneMinimapScanAt = 0
 let isDraggingMinimapCrop = false
 let calibrationDragOffset: Point = { x: 0, y: 0 }
 let championTemplates: ChampionTemplate[] | null = null
@@ -352,13 +339,23 @@ let minimapCrop = defaultMinimapCrop()
 let diagnosticMode = false
 let alertVoiceStorageWarning: string | null = null
 let alertVoicePreferences: AlertVoicePreferences = {
-  voiceURI: '',
+  voiceURI: 'piper:pt_BR-faber-medium',
   rate: 1,
   pitch: 1
 }
+let voiceEngineWorker: Worker | null = null
+let voiceEngineWorkerVoiceId: PiperVoiceId | null = null
+let voiceEngineRequestId = 0
+let voiceEngineRequests = new Map<
+  number,
+  { resolve: (blob: Blob | null) => void; reject: (error: Error) => void }
+>()
+let voiceAudioContext: AudioContext | null = null
+let activePiperAudio: AudioBufferSourceNode | null = null
 let lastJungleScanDiagnostics: MinimapScanDiagnostics = {
   status: 'not-run',
   point: null,
+  iconSize: null,
   zone: null,
   bestScore: null,
   runnerUpScore: null,
@@ -417,7 +414,143 @@ function updateAlertVoiceOutputs(): void {
   alertVoicePitchOutput.value = alertVoicePreferences.pitch.toFixed(2)
 }
 
+function piperVoiceFromURI(uri: string): PiperVoiceId | null {
+  if (!uri.startsWith('piper:')) return null
+  const voiceId = uri.slice('piper:'.length)
+  return Object.hasOwn(piperVoiceLabels, voiceId) ? (voiceId as PiperVoiceId) : null
+}
+
+function rejectVoiceEngineRequests(error: Error): void {
+  for (const request of voiceEngineRequests.values()) request.reject(error)
+  voiceEngineRequests.clear()
+}
+
+function getVoiceEngineWorker(voiceId: PiperVoiceId): Worker {
+  if (voiceEngineWorker && voiceEngineWorkerVoiceId !== voiceId) {
+    voiceEngineWorker.terminate()
+    rejectVoiceEngineRequests(new Error('A voz selecionada foi alterada.'))
+    voiceEngineWorker = null
+    voiceEngineWorkerVoiceId = null
+  }
+  if (voiceEngineWorker) return voiceEngineWorker
+
+  const worker = new Worker(new URL('./voice-engine.ts', import.meta.url), {
+    type: 'module'
+  })
+  voiceEngineWorker = worker
+  voiceEngineWorkerVoiceId = voiceId
+  worker.addEventListener('message', (event: MessageEvent<VoiceWorkerResponse>) => {
+    const response = event.data
+    if (response.type === 'progress') {
+      const progress = Math.round((response.loaded / response.total) * 100)
+      const downloadedMegabytes = (response.loaded / 1_000_000).toFixed(1)
+      voiceSettingsStatusElement.textContent =
+        `Baixando a voz ${piperVoiceLabels[voiceId]}: ${progress}% (${downloadedMegabytes} MB).`
+      return
+    }
+    const pending = voiceEngineRequests.get(response.requestId)
+    if (!pending) return
+    voiceEngineRequests.delete(response.requestId)
+    if (response.type === 'error') {
+      pending.reject(new Error(response.message))
+    } else if (response.type === 'audio') {
+      pending.resolve(response.blob)
+    } else {
+      pending.resolve(null)
+    }
+  })
+  worker.addEventListener('error', (event) => {
+    console.error('Local Piper worker failed.', event.message)
+    rejectVoiceEngineRequests(new Error('O mecanismo de voz local falhou.'))
+    if (voiceEngineWorker === worker) {
+      voiceEngineWorker = null
+      voiceEngineWorkerVoiceId = null
+    }
+  })
+  return worker
+}
+
+function requestVoiceEngine(
+  voiceId: PiperVoiceId,
+  request: VoiceEngineRequest
+): Promise<Blob | null> {
+  const worker = getVoiceEngineWorker(voiceId)
+  const requestId = ++voiceEngineRequestId
+  return new Promise((resolve, reject) => {
+    voiceEngineRequests.set(requestId, { resolve, reject })
+    worker.postMessage({ ...request, requestId, voiceId })
+  })
+}
+
+async function playPiperAudio(blob: Blob, onEnded?: () => void): Promise<void> {
+  voiceAudioContext ??= new AudioContext()
+  if (voiceAudioContext.state === 'suspended') await voiceAudioContext.resume()
+  const buffer = await voiceAudioContext.decodeAudioData(await blob.arrayBuffer())
+  stopPiperAudio()
+
+  const source = voiceAudioContext.createBufferSource()
+  source.buffer = buffer
+  source.playbackRate.value = alertVoicePreferences.rate
+  source.detune.value =
+    1200 * Math.log2(alertVoicePreferences.pitch / alertVoicePreferences.rate)
+  source.connect(voiceAudioContext.destination)
+  source.addEventListener(
+    'ended',
+    () => {
+      if (activePiperAudio === source) {
+        activePiperAudio = null
+        onEnded?.()
+      }
+    },
+    { once: true }
+  )
+  activePiperAudio = source
+  source.start()
+}
+
+function stopPiperAudio(): void {
+  const source = activePiperAudio
+  activePiperAudio = null
+  if (source) source.stop()
+}
+
+function speakPiperLocally(text: string, voiceId: PiperVoiceId): void {
+  void requestVoiceEngine(voiceId, { type: 'prepare', allowDownload: false })
+    .then(() => requestVoiceEngine(voiceId, { type: 'synthesize', text }))
+    .then(async (blob) => {
+      if (!blob) throw new Error('O mecanismo local não retornou áudio.')
+      await playPiperAudio(blob)
+    })
+    .catch((error: unknown) => {
+      if (error instanceof VoiceSelectionChangedError) return
+      console.error('Local Piper alert speech failed.', error)
+      voiceSettingsStatusElement.textContent =
+        'A voz Piper ainda não está disponível; o alerta usará a voz local do sistema.'
+      speakWithSystemVoice(text)
+    })
+}
+
+function speakWithSystemVoice(text: string): void {
+  if (!('speechSynthesis' in window)) {
+    voiceSettingsStatusElement.textContent =
+      'A voz local não está disponível neste dispositivo; os alertas visuais continuam ativos.'
+    return
+  }
+  try {
+    window.speechSynthesis.speak(createAlertUtterance(text))
+  } catch (error) {
+    console.error('System alert speech failed.', error)
+    voiceSettingsStatusElement.textContent =
+      'Não foi possível reproduzir a voz local; os alertas visuais continuam ativos.'
+  }
+}
+
 function speakLocally(text: string): void {
+  const piperVoiceId = piperVoiceFromURI(alertVoicePreferences.voiceURI)
+  if (piperVoiceId) {
+    speakPiperLocally(text, piperVoiceId)
+    return
+  }
   if (!('speechSynthesis' in window)) {
     throw new Error('A síntese de voz local não está disponível.')
   }
@@ -428,27 +561,36 @@ function speakLocally(text: string): void {
 }
 
 function selectedAlertVoice(): SpeechSynthesisVoice | null {
-  if (!('speechSynthesis' in window) || !alertVoicePreferences.voiceURI) return null
+  if (
+    !('speechSynthesis' in window) ||
+    !alertVoicePreferences.voiceURI ||
+    piperVoiceFromURI(alertVoicePreferences.voiceURI)
+  ) {
+    return null
+  }
   return window.speechSynthesis
     .getVoices()
     .find((voice) => voice.voiceURI === alertVoicePreferences.voiceURI) ?? null
 }
 
 function refreshAlertVoices(): void {
-  if (!('speechSynthesis' in window)) {
-    voiceSettingsStatusElement.textContent =
-      'A síntese de voz não está disponível nesta instalação.'
-    testVoiceControl.disabled = true
-    alertVoiceControl.disabled = true
-    return
-  }
-  const voices = window.speechSynthesis.getVoices()
+  const hasSystemSpeech = 'speechSynthesis' in window
+  const voices = hasSystemSpeech ? window.speechSynthesis.getVoices() : []
   const selectedUri = alertVoicePreferences.voiceURI
   const fragment = document.createDocumentFragment()
   const automaticOption = document.createElement('option')
   automaticOption.value = ''
   automaticOption.textContent = 'Automática (Português do sistema)'
   fragment.append(automaticOption)
+  const piperGroup = document.createElement('optgroup')
+  piperGroup.label = 'Piper · offline · pt-BR · CC0'
+  for (const [voiceId, voiceName] of Object.entries(piperVoiceLabels)) {
+    const option = document.createElement('option')
+    option.value = `piper:${voiceId}`
+    option.textContent = `${voiceName} (Piper, qualidade média)`
+    piperGroup.append(option)
+  }
+  fragment.append(piperGroup)
   for (const voice of voices) {
     const option = document.createElement('option')
     option.value = voice.voiceURI
@@ -456,18 +598,29 @@ function refreshAlertVoices(): void {
     fragment.append(option)
   }
   alertVoiceControl.replaceChildren(fragment)
-  if (selectedUri && voices.some((voice) => voice.voiceURI === selectedUri)) {
+  if (
+    piperVoiceFromURI(selectedUri) ||
+    (selectedUri && voices.some((voice) => voice.voiceURI === selectedUri))
+  ) {
     alertVoiceControl.value = selectedUri
-  } else if (voices.length > 0) {
+  } else if (selectedUri) {
     alertVoicePreferences.voiceURI = ''
     alertVoiceControl.value = ''
   }
-  if (voices.length === 0) {
+  const selectedPiperVoice = piperVoiceFromURI(selectedUri)
+  testVoiceControl.disabled = !hasSystemSpeech && !selectedPiperVoice
+  if (selectedPiperVoice) {
     voiceSettingsStatusElement.textContent =
-      'Nenhuma voz foi listada ainda. Instale ou habilite uma voz nas configurações de fala do sistema.'
+      `Piper ${piperVoiceLabels[selectedPiperVoice]} sintetiza localmente. A primeira prévia baixa o modelo (~63 MB); depois, não precisa de internet.`
+  } else if (!hasSystemSpeech) {
+    voiceSettingsStatusElement.textContent =
+      'Vozes do sistema não estão disponíveis; selecione uma voz Piper pt-BR para usar síntese offline.'
+  } else if (voices.length === 0) {
+    voiceSettingsStatusElement.textContent =
+      'Nenhuma voz do sistema foi listada. As vozes Piper pt-BR continuam disponíveis para uso offline.'
   } else {
     voiceSettingsStatusElement.textContent =
-      `${voices.length} voz(es) disponível(is) neste computador. A lista pode incluir vozes de idiomas diferentes.`
+      `${voices.length} voz(es) do sistema disponíveis. Piper também oferece três vozes pt-BR que funcionam offline.`
   }
   if (alertVoiceStorageWarning) {
     voiceSettingsStatusElement.textContent += ` ${alertVoiceStorageWarning}`
@@ -476,7 +629,10 @@ function refreshAlertVoices(): void {
 
 function createAlertUtterance(text: string): SpeechSynthesisUtterance {
   const utterance = new SpeechSynthesisUtterance(text)
-  const voice = selectedAlertVoice()
+  const voice = selectedAlertVoice() ??
+    window.speechSynthesis.getVoices().find((entry) =>
+      entry.lang.toLocaleLowerCase().startsWith('pt-br')
+    ) ?? null
   utterance.voice = voice
   utterance.lang = voice?.lang ?? 'pt-BR'
   utterance.rate = alertVoicePreferences.rate
@@ -502,8 +658,23 @@ voiceSettingsToggle.addEventListener('click', () => {
 })
 
 alertVoiceControl.addEventListener('change', () => {
+  const previousVoiceId = piperVoiceFromURI(alertVoicePreferences.voiceURI)
   alertVoicePreferences.voiceURI = alertVoiceControl.value
   persistAlertVoicePreferences()
+  const nextVoiceId = piperVoiceFromURI(alertVoicePreferences.voiceURI)
+  testVoiceControl.disabled = !('speechSynthesis' in window) && !nextVoiceId
+  if (previousVoiceId !== nextVoiceId) stopPiperAudio()
+  if (previousVoiceId !== nextVoiceId && voiceEngineWorker) {
+    voiceEngineWorker.terminate()
+    voiceEngineWorker = null
+    voiceEngineWorkerVoiceId = null
+    rejectVoiceEngineRequests(new VoiceSelectionChangedError())
+  }
+  if (nextVoiceId) {
+    voiceSettingsStatusElement.textContent =
+      `Piper ${piperVoiceLabels[nextVoiceId]} sintetiza localmente. A primeira prévia baixa o modelo (~63 MB); depois, não precisa de internet.`
+    return
+  }
   const voice = selectedAlertVoice()
   voiceSettingsStatusElement.textContent = voice
     ? `Voz selecionada: ${voice.name} (${voice.lang}).`
@@ -523,6 +694,41 @@ alertVoicePitchControl.addEventListener('input', () => {
 })
 
 testVoiceControl.addEventListener('click', () => {
+  const piperVoiceId = piperVoiceFromURI(alertVoicePreferences.voiceURI)
+  if (piperVoiceId) {
+    window.speechSynthesis?.cancel()
+    stopPiperAudio()
+    testVoiceControl.disabled = true
+    voiceSettingsStatusElement.textContent =
+      `Preparando a voz ${piperVoiceLabels[piperVoiceId]} localmente...`
+    void requestVoiceEngine(piperVoiceId, {
+      type: 'prepare',
+      allowDownload: true
+    })
+      .then(() =>
+        requestVoiceEngine(piperVoiceId, {
+          type: 'synthesize',
+          text: 'Prévia de voz. O jungler inimigo foi localizado.'
+        })
+      )
+      .then(async (blob) => {
+        if (!blob) throw new Error('O mecanismo local não retornou áudio.')
+        voiceSettingsStatusElement.textContent = `Reproduzindo prévia: ${piperVoiceLabels[piperVoiceId]}.`
+        await playPiperAudio(blob, () => {
+          voiceSettingsStatusElement.textContent = 'Prévia concluída.'
+        })
+      })
+      .catch((error: unknown) => {
+        if (error instanceof VoiceSelectionChangedError) return
+        console.error('Piper voice preview failed.', error)
+        voiceSettingsStatusElement.textContent =
+          'Não foi possível reproduzir a prévia. Confira a conexão e tente novamente.'
+      })
+      .finally(() => {
+        testVoiceControl.disabled = false
+      })
+    return
+  }
   if (!('speechSynthesis' in window)) {
     voiceSettingsStatusElement.textContent = 'A síntese de voz não está disponível.'
     return
@@ -532,6 +738,7 @@ testVoiceControl.addEventListener('click', () => {
       'A voz selecionada não está mais disponível. Escolha outra voz na lista.'
     return
   }
+  stopPiperAudio()
   window.speechSynthesis.cancel()
   const utterance = createAlertUtterance(
     'Prévia de voz. O jungler inimigo foi localizado.'
@@ -548,44 +755,26 @@ testVoiceControl.addEventListener('click', () => {
   window.speechSynthesis.speak(utterance)
 })
 
-function announceEvent(titleText: string): HTMLLIElement {
-  if (events.firstElementChild?.classList.contains('empty-state')) {
-    events.replaceChildren()
-  }
-
-  const item = document.createElement('li')
-  item.className = 'event-card'
-
-  const title = document.createElement('strong')
-  title.textContent = titleText
-
-  const time = document.createElement('time')
-  time.dateTime = new Date().toISOString()
-  time.textContent = new Date().toLocaleTimeString('pt-BR', {
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit'
-  })
-
-  item.append(title, time)
-  events.prepend(item)
-  eventCountElement.textContent = String(events.querySelectorAll('.event-card').length)
+function announceEvent(titleText: string): void {
   window.companion.publishOverlayAlert(titleText)
-  if (diagnosticMode) {
-    item.dataset.diagnosticSuppressed = 'true'
-    return item
-  }
+  if (diagnosticMode) return
 
-  if ('speechSynthesis' in window) {
+  if ('speechSynthesis' in window || piperVoiceFromURI(alertVoicePreferences.voiceURI)) {
     try {
       speakLocally(titleText)
     } catch (error) {
       console.error('Local alert speech failed.', error)
       voiceSettingsStatusElement.textContent =
-        `Não foi possível reproduzir o alerta: ${error instanceof Error ? error.message : 'erro inesperado'}.`
+        'Não foi possível reproduzir o alerta. Confira as configurações de voz e tente novamente.'
     }
   }
-  return item
+}
+
+function setOverlayLastSeenMarker(marker: OverlayMarker | null): void {
+  void window.companion.setOverlayMarker(marker).catch((error: unknown) => {
+    console.error('Could not update the last-seen minimap marker.', error)
+    setStatus('O rastreamento segue ativo, mas não foi possível atualizar o marcador no minimapa.')
+  })
 }
 
 function setStatus(message: string): void {
@@ -629,8 +818,6 @@ developerModeControl.addEventListener('click', () => {
 })
 
 function resetMatchEvents(): void {
-  laneDetectionEnabled = false
-  rosterPromptAnnounced = false
   voidGrubAlertAnnounced = false
   lastRecognizedClock = null
   stableClockCandidate = null
@@ -638,25 +825,26 @@ function resetMatchEvents(): void {
   lastClockSampleAt = 0
   lastClockReadings = []
   junglePortraitTemplate = null
-  enemyDetectionAnnounced = false
-  lastMissingLaneMinimapScanAt = 0
   lastJungleScanAt = 0
   pendingJungleZone = null
-  pendingJungleZoneScans = 0
   pendingJunglePoint = null
+  pendingJungleZoneScans = 0
   announcedJungleZone = null
   lastConfirmedJungleZone = null
+  lastConfirmedJungleMarker = null
+  jungleDisappearanceAnnounced = false
   jungleMissedScans = 0
+  setOverlayLastSeenMarker(null)
   ownTeamSide = null
-  enemyPlayers = []
   jungleCaptureAnnounced = false
-  activeJunglerPlayerId = null
-  roster.hidden = true
-  rosterStatusElement.textContent = 'Aguardando captura para consultar a API local da partida.'
-  playerList.replaceChildren()
-  jungleCard.hidden = true
+  trackedJungler = null
+  junglerStatusElement.textContent = 'Aguardando identificar o jungler adversário.'
+  jungleCard.hidden = false
   junglePortrait.removeAttribute('src')
-  jungleLocation.textContent = 'Aguardando a API local da partida.'
+  junglePortrait.hidden = true
+  jungleLocation.textContent = stream
+    ? 'Aguardando a API local identificar o jungler.'
+    : 'Inicie a captura para acompanhar o jungler desta partida.'
 }
 
 function parseGameClock(text: string): number | null {
@@ -694,26 +882,6 @@ function drawCircularCrop(
   target.restore()
 }
 
-function laneFromLivePosition(position: string): TeamLane | null {
-  switch (position.trim().toLocaleUpperCase()) {
-    case 'TOP':
-      return 'top'
-    case 'JUNGLE':
-      return 'jungle'
-    case 'MID':
-    case 'MIDDLE':
-      return 'mid'
-    case 'BOT':
-    case 'BOTTOM':
-      return 'adc'
-    case 'UTILITY':
-    case 'SUPPORT':
-      return 'support'
-    default:
-      return null
-  }
-}
-
 function championFromLiveName(name: string): ChampionDefinition | null {
   const normalize = (value: string): string =>
     value.toLocaleLowerCase().replace(/[^a-z0-9]/g, '')
@@ -725,99 +893,48 @@ function championFromLiveName(name: string): ChampionDefinition | null {
   ) ?? null
 }
 
-async function applyLiveClientRoster(result: LiveClientRosterResult): Promise<void> {
-  roster.hidden = false
+async function applyLiveClientJungler(result: LiveClientJunglerResult): Promise<void> {
   if (result.status === 'unavailable') {
-    rosterStatusElement.textContent = `API local indisponível: ${result.message}`
+    console.error('The local League client did not return jungler data.', result.message)
+    junglerStatusElement.textContent =
+      'Não foi possível identificar o jungler. Confirme que a partida está ativa.'
     return
   }
   ownTeamSide = result.ownTeamSide
-  if (result.players.length !== teamLaneOrder.length) {
-    enemyPlayers = []
-    playerList.replaceChildren()
-    updateJunglePortrait()
-    rosterStatusElement.textContent =
-      `API local conectada, mas retornou ${result.players.length} oponentes; ` +
-      `este companion espera ${teamLaneOrder.length}.`
+  if (!result.jungler) {
+    clearTrackedJungler()
+    junglerStatusElement.textContent =
+      'A partida foi conectada, mas não foi possível identificar um único jungler adversário.'
     return
   }
 
-  const previousPlayers = new Map(enemyPlayers.map((player) => [player.id, player]))
-  const apiLanes = result.players.map((player) => laneFromLivePosition(player.position))
-  const apiLaneCounts = new Map<TeamLane, number>()
-  for (const lane of apiLanes) {
-    if (lane) apiLaneCounts.set(lane, (apiLaneCounts.get(lane) ?? 0) + 1)
+  const champion = championFromLiveName(result.jungler.championName)
+  if (!champion) {
+    clearTrackedJungler()
+    junglerStatusElement.textContent =
+      'O jungler foi identificado, mas o retrato dele não está disponível.'
+    return
   }
-  enemyPlayers = result.players.map((apiPlayer, index) => {
-    const id = `enemy-player-${index}`
-    const previous = previousPlayers.get(id)
-    const apiLane = apiLanes[index] ?? null
-    const uniqueApiLane =
-      apiLane && apiLaneCounts.get(apiLane) === 1 ? apiLane : null
-    const laneSource =
-      previous?.laneSource === 'manual'
-        ? 'manual'
-        : uniqueApiLane
-          ? 'api'
-          : 'unknown'
-    return {
-      id,
-      lane: previous?.laneSource === 'manual'
-        ? previous.lane
-        : uniqueApiLane ?? previous?.lane ?? teamLaneOrder[index],
-      laneSource,
-      championId: previous?.championId ?? null,
-      championName: previous?.championName ?? null,
-      portrait: previous?.portrait ?? null,
-      portraitUrl: previous?.portraitUrl ?? null
-    }
-  })
-
-  for (let index = 0; index < result.players.length; index += 1) {
-    const apiPlayer = result.players[index]
-    const player = enemyPlayers[index]
-    if (!apiPlayer || !player) continue
-    const champion = championFromLiveName(apiPlayer.championName)
-    if (!champion) {
-      player.championId = null
-      player.championName = apiPlayer.championName
-      player.portrait = null
-      player.portraitUrl = null
-      continue
-    }
-    if (player.championId !== champion.id || !player.portrait) {
-      await assignPlayerChampion(player, champion.id, false)
-    }
-  }
-
-  const unknownPositions = enemyPlayers.filter((player) => player.laneSource === 'unknown').length
-  const positionMessage = unknownPositions > 0
-    ? `; posições não informadas para ${unknownPositions}, corrija no seletor`
-    : ''
-  rosterStatusElement.textContent =
-    `API local conectada; ${enemyPlayers.length} oponentes identificados${positionMessage}.`
-  if (!enemyDetectionAnnounced) {
-    enemyDetectionAnnounced = true
-    announceEvent('Inimigos detectados com sucesso.')
-  }
-  renderEnemyRoster()
-  updateJunglePortrait()
+  if (!(await assignJunglerChampion(champion.id))) return
+  junglerStatusElement.textContent =
+    `Rastreando apenas ${champion.name}; identificado ${
+      result.jungler.source === 'smite'
+        ? 'pelo feitiço Golpear'
+        : 'pela posição informada na partida'
+    }.`
 }
 
-async function refreshLiveClientRoster(): Promise<void> {
+async function refreshLiveClientJungler(): Promise<void> {
   if (!stream || rosterRefreshInProgress) return
   const requestedStream = stream
   rosterRefreshInProgress = true
   try {
-    const result = await window.companion.readLiveClientRoster()
-    if (stream === requestedStream) await applyLiveClientRoster(result)
+    const result = await window.companion.readLiveClientJungler()
+    if (stream === requestedStream) await applyLiveClientJungler(result)
   } catch (error) {
-    console.error('Could not retrieve the local League match roster.', error)
-    roster.hidden = false
-    rosterStatusElement.textContent =
-      error instanceof Error
-        ? `Falha ao consultar a API local: ${error.message}`
-        : 'Falha ao consultar a API local da partida.'
+    console.error('Could not identify the enemy jungler from the local League client.', error)
+    junglerStatusElement.textContent =
+      'Não foi possível identificar o jungler nesta partida.'
   } finally {
     rosterRefreshInProgress = false
   }
@@ -842,112 +959,9 @@ async function loadChampionLibrary(): Promise<ChampionTemplate[]> {
   }
 }
 
-function renderEnemyRoster(): void {
-  const players = [...enemyPlayers].sort(
-    (first, second) => teamLaneOrder.indexOf(first.lane) - teamLaneOrder.indexOf(second.lane)
-  )
-  const fragment = document.createDocumentFragment()
-  for (const player of players) {
-    const item = document.createElement('li')
-    item.className = 'enemy-player'
-    item.draggable = true
-    item.dataset.playerId = player.id
-
-    const portrait = document.createElement('img')
-    portrait.alt = player.championName
-      ? `Retrato de ${player.championName}`
-      : 'Retrato ainda oculto'
-    portrait.src = player.portraitUrl ?? ''
-    portrait.hidden = player.portraitUrl === null
-
-    const placeholder = document.createElement('span')
-    placeholder.className = 'player-portrait-placeholder'
-    placeholder.textContent = '?'
-    placeholder.hidden = player.portraitUrl !== null
-
-    const readable = document.createElement('div')
-    readable.className = 'enemy-player-readable'
-    const readableName = document.createElement('strong')
-    readableName.textContent = player.championName ?? 'Oponente'
-    const readableLane = document.createElement('span')
-    readableLane.textContent =
-      player.laneSource === 'unknown' ? 'POSIÇÃO?' : teamLaneLabels[player.lane]
-    readable.append(readableName, readableLane)
-
-    const details = document.createElement('div')
-    details.className = 'enemy-player-details'
-
-    const champion = document.createElement('select')
-    champion.className = 'enemy-player-champion'
-    champion.setAttribute('aria-label', `Campeão de ${teamLaneLabels[player.lane]}`)
-    const unknownChampion = document.createElement('option')
-    unknownChampion.value = ''
-    unknownChampion.textContent = 'Campeão não identificado'
-    champion.append(unknownChampion)
-    for (const definition of championCatalog.champions as ChampionDefinition[]) {
-      const option = document.createElement('option')
-      option.value = definition.id
-      option.textContent = definition.name
-      option.selected = definition.id === player.championId
-      champion.append(option)
-    }
-    if (player.championName && !player.championId) {
-      unknownChampion.textContent = `${player.championName} (ícone local indisponível)`
-    }
-    champion.addEventListener('change', () => {
-      void assignPlayerChampion(player, champion.value)
-    })
-
-    const lane = document.createElement('select')
-    lane.className = 'enemy-player-lane'
-    lane.setAttribute('aria-label', `Posição de ${player.championName ?? 'campeão não identificado'}`)
-    const unknownPosition = document.createElement('option')
-    unknownPosition.value = ''
-    unknownPosition.textContent = 'Posição não informada pela API'
-    unknownPosition.selected = player.laneSource === 'unknown'
-    lane.append(unknownPosition)
-    for (const optionLane of teamLaneOrder) {
-      const option = document.createElement('option')
-      option.value = optionLane
-      option.textContent = teamLaneLabels[optionLane]
-      option.selected =
-        player.laneSource !== 'unknown' && optionLane === player.lane
-      lane.append(option)
-    }
-    lane.addEventListener('change', () => {
-      const selectedLane = teamLaneOrder.find((optionLane) => optionLane === lane.value)
-      if (selectedLane) assignPlayerLane(player, selectedLane)
-    })
-
-    details.append(readable, champion, lane)
-    item.append(portrait, placeholder, details)
-    fragment.append(item)
-  }
-  playerList.replaceChildren(fragment)
-}
-
-async function assignPlayerChampion(
-  player: EnemyPlayer,
-  championId: string,
-  manuallySelected = true
-): Promise<void> {
-  if (!championId) {
-    player.championId = null
-    player.championName = null
-    player.portrait = null
-    player.portraitUrl = null
-    updateJunglePortrait()
-    renderEnemyRoster()
-    return
-  }
-
+async function assignJunglerChampion(championId: string): Promise<boolean> {
   try {
-    if (
-      manuallySelected &&
-      enemyPlayers.some((entry) => entry.id !== player.id && entry.championId === championId)
-    ) {
-      throw new Error('Esse campeão já está atribuído a outra linha.')
-    }
+    if (trackedJungler?.championId === championId) return true
     const templates = await loadChampionLibrary()
     const selected = templates.find((champion) => champion.id === championId)
     if (!selected) throw new Error(`Champion ${championId} is not in the local catalog.`)
@@ -964,203 +978,61 @@ async function assignPlayerChampion(
       portraitCanvas.width,
       portraitCanvas.height
     )
-    player.championId = selected.id
-    player.championName = selected.name
-    player.portraitUrl = selected.url
-    player.portrait = portraitContext!.getImageData(0, 0, portraitCanvas.width, portraitCanvas.height)
-    updateJunglePortrait()
-    renderEnemyRoster()
+    trackedJungler = {
+      championId: selected.id,
+      championName: selected.name,
+      portraitUrl: selected.url,
+      portrait: portraitContext!.getImageData(0, 0, portraitCanvas.width, portraitCanvas.height)
+    }
+    resetJunglerTracking()
+    junglePortrait.hidden = false
+    junglePortrait.src = selected.url
+    jungleLocation.textContent = 'Ícone do jungler carregado; procurando no minimapa.'
+    if (!jungleCaptureAnnounced) {
+      jungleCaptureAnnounced = true
+      announceEvent('Jungler identificado; buscando apenas o ícone dele no minimapa.')
+    }
+    return true
   } catch (error) {
-    console.error('Could not set the manually selected champion.', error)
-    setStatus(
-      error instanceof Error
-        ? `Não foi possível selecionar o campeão: ${error.message}`
-        : 'Não foi possível selecionar o campeão.'
-    )
+    console.error('Could not load the enemy jungler portrait.', error)
+    clearTrackedJungler()
+    junglerStatusElement.textContent = 'Não foi possível carregar o retrato do jungler.'
+    return false
   }
 }
 
-function assignPlayerLane(player: EnemyPlayer, lane: TeamLane): void {
-  if (player.lane === lane && player.laneSource === 'manual') return
-  const displacedPlayer = enemyPlayers.find((entry) => entry.lane === lane)
-  if (displacedPlayer) {
-    displacedPlayer.lane = player.lane
-    displacedPlayer.laneSource = 'manual'
-  }
-  player.lane = lane
-  player.laneSource = 'manual'
-  updateJunglePortrait()
-  renderEnemyRoster()
-}
-
-function updateJunglePortrait(): void {
-  const jungler = enemyPlayers.find(
-    (player) => player.lane === 'jungle' && player.laneSource !== 'unknown'
-  )
-  if (activeJunglerPlayerId === jungler?.id && junglePortraitTemplate === (jungler?.portrait ?? null)) {
-    return
-  }
-  activeJunglerPlayerId = jungler?.id ?? null
+function resetJunglerTracking(): void {
   jungleCaptureAnnounced = false
-  junglePortraitTemplate = jungler?.portrait ?? null
-  if (!jungler?.portrait || !jungler.portraitUrl) {
-    jungleCard.hidden = true
-    jungleCaptureAnnounced = false
-    return
-  }
-  jungleCard.hidden = false
-  junglePortrait.src = jungler.portraitUrl
-  jungleLocation.textContent = 'Ícone do jungler carregado; procurando no minimapa.'
+  lastJungleScanAt = 0
+  junglePortraitTemplate = trackedJungler?.portrait ?? null
   pendingJungleZone = null
-  pendingJungleZoneScans = 0
   pendingJunglePoint = null
+  pendingJungleZoneScans = 0
   announcedJungleZone = null
   lastConfirmedJungleZone = null
+  lastConfirmedJungleMarker = null
+  jungleDisappearanceAnnounced = false
   jungleMissedScans = 0
-  if (!jungleCaptureAnnounced) {
-    jungleCaptureAnnounced = true
-    announceEvent('Jungler identificado pela API; buscando no minimapa.')
-  }
+  setOverlayLastSeenMarker(null)
 }
 
-playerList.addEventListener('dragstart', (event) => {
-  const item = (event.target as HTMLElement).closest<HTMLLIElement>('.enemy-player')
-  draggedEnemyPlayerId = item?.dataset.playerId ?? null
-  if (event.dataTransfer && draggedEnemyPlayerId) {
-    event.dataTransfer.effectAllowed = 'move'
-    event.dataTransfer.setData('text/plain', draggedEnemyPlayerId)
-  }
-})
-
-playerList.addEventListener('dragover', (event) => {
-  if ((event.target as HTMLElement).closest('.enemy-player')) event.preventDefault()
-})
-
-playerList.addEventListener('drop', (event) => {
-  const targetItem = (event.target as HTMLElement).closest<HTMLLIElement>('.enemy-player')
-  const targetPlayer = enemyPlayers.find((player) => player.id === targetItem?.dataset.playerId)
-  const sourcePlayer = enemyPlayers.find(
-    (player) => player.id === (event.dataTransfer?.getData('text/plain') || draggedEnemyPlayerId)
-  )
-  if (!targetPlayer || !sourcePlayer || targetPlayer === sourcePlayer) return
-  event.preventDefault()
-  const targetLane = targetPlayer.lane
-  targetPlayer.lane = sourcePlayer.lane
-  sourcePlayer.lane = targetLane
-  draggedEnemyPlayerId = null
-  updateJunglePortrait()
-  renderEnemyRoster()
-})
-
-playerList.addEventListener('dragend', () => {
-  draggedEnemyPlayerId = null
-})
-
-function classifyJungleZone(point: Point): JungleZone | null {
-  if (point.x < 0 || point.x > 1 || point.y < 0 || point.y > 1) return null
-
-  if (Math.hypot(point.x - 0.3, point.y - 0.16) <= 0.045) return 'baron-pit'
-  if (Math.hypot(point.x - 0.8, point.y - 0.8) <= 0.075) return 'dragon-pit'
-
-  const campAnchors: Array<{
-    name: JungleCamp
-    side: MapSide
-    x: number
-    y: number
-  }> = [
-    { name: 'blue-buff', side: 'blue', x: 0.2, y: 0.58 },
-    { name: 'gromp', side: 'blue', x: 0.18, y: 0.38 },
-    { name: 'wolves', side: 'blue', x: 0.34, y: 0.45 },
-    { name: 'raptors', side: 'blue', x: 0.48, y: 0.58 },
-    { name: 'red-buff', side: 'blue', x: 0.58, y: 0.7 },
-    { name: 'krugs', side: 'blue', x: 0.69, y: 0.78 }
-  ]
-  let nearestCamp: (typeof campAnchors)[number] | null = null
-  let nearestCampDistance = Number.POSITIVE_INFINITY
-  for (const camp of campAnchors) {
-    for (const side of ['blue', 'red'] as const) {
-      const mirrored = side === 'red'
-      const x = mirrored ? 1 - camp.x : camp.x
-      const y = mirrored ? 1 - camp.y : camp.y
-      const distance = Math.hypot(point.x - x, point.y - y)
-      if (distance < nearestCampDistance) {
-        nearestCamp = { ...camp, side, x, y }
-        nearestCampDistance = distance
-      }
-    }
-  }
-  if (nearestCamp && nearestCampDistance <= 0.065) {
-    return `camp:${nearestCamp.side}:${nearestCamp.name}`
-  }
-
-  const riverDistance = Math.abs(point.x - point.y) / Math.SQRT2
-  if (riverDistance <= 0.075) {
-    if (point.x < 0.38) return 'river-top'
-    if (point.x > 0.62) return 'river-bot'
-    return 'river-mid'
-  }
-
-  if (Math.hypot(point.x - 0.06, point.y - 0.94) <= 0.1) return 'blue-base'
-  if (Math.hypot(point.x - 0.94, point.y - 0.06) <= 0.1) return 'red-base'
-
-  const distanceToMid = Math.abs(point.x + point.y - 1) / Math.SQRT2
-  if (distanceToMid <= 0.055) return 'mid-lane'
-  if (point.x < 0.09 || point.y < 0.09) return 'top-lane'
-  if (point.x > 0.91 || point.y > 0.91) return 'bot-lane'
-
-  return point.x + point.y > 1 ? 'jungle:blue' : 'jungle:red'
-}
-
-function formatJungleZone(zone: JungleZone, ownSide: MapSide | null): string {
-  if (zone === 'baron-pit') return 'Jungler no covil do Barão.'
-  if (zone === 'dragon-pit') return 'Jungler no covil do Dragão.'
-  if (zone === 'river-top') return 'Jungler no rio superior.'
-  if (zone === 'river-mid') return 'Jungler no rio central.'
-  if (zone === 'river-bot') return 'Jungler no rio inferior.'
-  if (zone === 'mid-lane') return 'Jungler na rota do meio.'
-  if (zone === 'top-lane') return 'Jungler na rota superior.'
-  if (zone === 'bot-lane') return 'Jungler na rota inferior.'
-  if (zone === 'blue-base' || zone === 'red-base') {
-    const side = zone === 'blue-base' ? 'blue' : 'red'
-    const sideName = side === 'blue' ? 'azul' : 'vermelha'
-    const teamLabel = ownSide === null
-      ? `do lado ${sideName}`
-      : side === ownSide
-        ? 'aliada'
-        : 'inimiga'
-    return `Jungler na base ${teamLabel} (${sideName}).`
-  }
-
-  const [area, side, location] = zone.split(':')
-  const sideName = side === 'blue' ? 'azul' : 'vermelho'
-  const teamLabel = ownSide === null
-    ? `lado ${sideName}`
-    : side === ownSide
-      ? 'aliado'
-      : 'inimigo'
-  if (area === 'camp') {
-    const campNames: Record<JungleCamp, string> = {
-      'blue-buff': 'Blue',
-      'red-buff': 'Red',
-      wolves: 'Lobos',
-      raptors: 'Acúleos',
-      gromp: 'Grompe',
-      krugs: 'Krugues'
-    }
-    const campName = Object.entries(campNames).find(([camp]) => camp === location)?.[1]
-    return campName
-      ? `Jungler no ${campName} ${teamLabel}.`
-      : `Jungler na selva do lado ${teamLabel}.`
-  }
-  return area === 'jungle'
-    ? `Jungler na selva do lado ${teamLabel}.`
-    : 'Jungler em uma região não classificada.'
+function clearTrackedJungler(): void {
+  trackedJungler = null
+  junglePortraitTemplate = null
+  junglePortrait.hidden = true
+  junglePortrait.removeAttribute('src')
+  jungleLocation.textContent = stream
+    ? 'Aguardando identificar o jungler adversário.'
+    : 'Inicie a captura para acompanhar o jungler desta partida.'
+  jungleCaptureAnnounced = false
+  resetJunglerTracking()
 }
 
 function findPortraitOnMinimap(template: ImageData): MinimapScanDiagnostics {
   const result: MinimapScanDiagnostics = {
     status: 'no-red-ring',
     point: null,
+    iconSize: null,
     zone: null,
     bestScore: null,
     runnerUpScore: null,
@@ -1258,6 +1130,7 @@ function findPortraitOnMinimap(template: ImageData): MinimapScanDiagnostics {
     y: (best.y + best.size / 2) / height
   }
   result.point = point
+  result.iconSize = best.size / width
   result.bestScore = best.score
   result.runnerUpScore = secondDistinctCandidate?.score ?? null
   result.zone = classifyJungleZone(point)
@@ -1279,6 +1152,7 @@ function findJunglerOnMinimap(): MinimapScanDiagnostics {
     return {
       status: 'not-run',
       point: null,
+      iconSize: null,
       zone: null,
       bestScore: null,
       runnerUpScore: null,
@@ -1288,6 +1162,19 @@ function findJunglerOnMinimap(): MinimapScanDiagnostics {
   return findPortraitOnMinimap(junglePortraitTemplate)
 }
 
+function createOverlayMarker(match: MinimapScanDiagnostics): OverlayMarker | null {
+  if (!video || !match.point || match.iconSize === null) return null
+  const minimap = estimateJunglerMapBounds(video.videoWidth, video.videoHeight)
+  const width = minimap.right - minimap.left
+  const height = minimap.bottom - minimap.top
+  if (width <= 0 || height <= 0) return null
+  return {
+    x: (minimap.left + match.point.x * width) / video.videoWidth,
+    y: (minimap.top + match.point.y * height) / video.videoHeight,
+    size: (match.iconSize * width) / video.videoWidth
+  }
+}
+
 function updateDiagnosticPanel(): void {
   if (!diagnosticMode) return
   const dimensions =
@@ -1295,22 +1182,10 @@ function updateDiagnosticPanel(): void {
       ? `${video.videoWidth}×${video.videoHeight}`
       : 'sem captura'
   const minimap = video ? estimateJunglerMapBounds(video.videoWidth, video.videoHeight) : null
-  const laneCounts = countMarkersByLane(enemyMarkers)
-  const laneWatchStatus = (['top', 'mid', 'bot'] as const)
-    .map((lane) => {
-      const watch = laneWatches[lane]
-      const state = !watch.hasBeenSeen
-        ? 'aguardando primeira detecção'
-        : watch.missingSince === null
-          ? 'visível'
-          : `ausente ${formatElapsed(Math.floor((Date.now() - watch.missingSince) / 1000))}${watch.alerted ? ' (alertado)' : ''}`
-      return `${lane.toUpperCase()}: ${state}, marcadores=${laneCounts[lane]}, alerta=${laneAlertState(lane, Date.now())}`
-    })
-    .join(' | ')
   const lines = [
     `Frame: ${dimensions}`,
-    `Roster: ${rosterStatusElement.textContent ?? 'sem estado'}`,
-    `Detecção das lanes: ${laneDetectionEnabled ? 'ativa' : 'aguardando 01:20'}; ${laneWatchStatus}`,
+    `Jungler: ${junglerStatusElement.textContent ?? 'sem estado'}`,
+    `Jungler: ${trackedJungler?.championName ?? 'não identificado'}`,
     `Relógio: ${lastRecognizedClock === null ? 'não lido' : formatElapsed(lastRecognizedClock)}`,
     `OCR bruto: ${lastClockReadings.length > 0
       ? lastClockReadings.map((reading) =>
@@ -1320,7 +1195,7 @@ function updateDiagnosticPanel(): void {
     `Perfil de captura: ${activeCaptureProfile || 'aguardando captura'}`,
     `Minimapa: ${minimap ? `x=${minimap.left}, y=${minimap.top}, ${minimap.right - minimap.left}×${minimap.bottom - minimap.top}` : 'indisponível'}`,
     `Lado local: ${ownTeamSide ?? 'não identificado'}`,
-    `Campeão do jungler: ${enemyPlayers.find((entry) => entry.lane === 'jungle')?.championName ?? 'não confirmado'}`,
+    `Campeão do jungler: ${trackedJungler?.championName ?? 'não confirmado'}`,
     `Busca no mapa: ${lastJungleScanDiagnostics.status}`,
     `Anel vermelho (amostras): ${lastJungleScanDiagnostics.redRingSamples}`,
     `Score: ${lastJungleScanDiagnostics.bestScore?.toFixed(3) ?? '—'}; segundo candidato: ${lastJungleScanDiagnostics.runnerUpScore?.toFixed(3) ?? '—'}`,
@@ -1424,31 +1299,13 @@ async function saveDiagnosticSample(): Promise<void> {
       },
       minimapCrop,
       minimapRegion: minimap,
-      roster: enemyPlayers.map((player) => ({
-        lane: player.lane,
-        laneSource: player.laneSource,
-        championId: player.championId,
-        championName: player.championName
-      })),
+      jungler: trackedJungler
+        ? {
+            championId: trackedJungler.championId,
+            championName: trackedJungler.championName
+          }
+        : null,
       minimapScan: lastJungleScanDiagnostics,
-      laneDetection: {
-        enabled: laneDetectionEnabled,
-        counts: countMarkersByLane(enemyMarkers),
-        watches: Object.fromEntries(
-          (['top', 'mid', 'bot'] as const).map((lane) => [
-            lane,
-            {
-              hasBeenSeen: laneWatches[lane].hasBeenSeen,
-              missingSeconds:
-                laneWatches[lane].missingSince === null
-                  ? null
-                  : Math.floor((Date.now() - laneWatches[lane].missingSince) / 1000),
-              alerted: laneWatches[lane].alerted,
-              alertState: laneAlertState(lane, Date.now())
-            }
-          ])
-        )
-      },
       note: 'Captured locally from the user-authorized visible game window.'
     }
     const savedPath = await window.companion.saveDiagnosticSample({
@@ -1460,10 +1317,7 @@ async function saveDiagnosticSample(): Promise<void> {
       : 'Salvamento cancelado; nenhum arquivo foi criado.'
   } catch (error) {
     console.error('Could not save visual diagnostic sample.', error)
-    diagnosticStatusElement.textContent =
-      error instanceof Error
-        ? `Falha ao salvar a amostra: ${error.message}`
-        : 'Falha ao salvar a amostra diagnóstica.'
+    diagnosticStatusElement.textContent = 'Não foi possível salvar a amostra de diagnóstico.'
   } finally {
     captureDiagnosticControl.disabled = !video
   }
@@ -1472,35 +1326,6 @@ async function saveDiagnosticSample(): Promise<void> {
 captureDiagnosticControl.addEventListener('click', () => {
   void saveDiagnosticSample()
 })
-
-function refreshMissingLaneMinimapVisibility(
-  counts: Record<Lane, number>,
-  now: number
-): void {
-  if (
-    !video ||
-    Date.now() - lastMissingLaneMinimapScanAt < missingLaneMinimapScanInterval
-  ) {
-    return
-  }
-  lastMissingLaneMinimapScanAt = now
-  for (const lane of ['top', 'mid', 'bot'] as const) {
-    const watch = laneWatches[lane]
-    if (!watch.hasBeenSeen) continue
-    if (counts[lane] > 0 && watch.missingSince === null) continue
-    const player = findLanePlayer(lane)
-    if (!player?.portrait) continue
-    if (!findPortraitOnMinimap(player.portrait).point) continue
-
-    watch.missingSince = now
-    if (watch.alerted && watch.alertCard) {
-      const title = watch.alertCard.querySelector('strong')
-      if (title) title.textContent = `${lane.toUpperCase()} laner inimigo visível no minimapa.`
-      watch.alerted = false
-      watch.alertCard = null
-    }
-  }
-}
 
 async function inspectJungler(): Promise<void> {
   if (jungleScanInProgress || Date.now() - lastJungleScanAt < jungleScanInterval) {
@@ -1513,6 +1338,7 @@ async function inspectJungler(): Promise<void> {
       lastJungleScanDiagnostics = {
         status: 'not-run',
         point: null,
+        iconSize: null,
         zone: null,
         bestScore: null,
         runnerUpScore: null,
@@ -1528,50 +1354,72 @@ async function inspectJungler(): Promise<void> {
     if (match.status !== 'found' || !match.point || !match.zone) {
       jungleMissedScans += 1
       pendingJungleZone = null
-      pendingJungleZoneScans = 0
       pendingJunglePoint = null
-      if (jungleMissedScans >= 3) {
+      pendingJungleZoneScans = 0
+      if (jungleMissedScans >= 2) {
         announcedJungleZone = null
-        jungleLocation.textContent = lastConfirmedJungleZone
-          ? `Jungler não visível; última posição confirmada: ${formatJungleZone(lastConfirmedJungleZone, ownTeamSide)}`
-          : 'Retrato pronto; jungler ainda não visível no minimapa.'
+        if (lastConfirmedJungleZone && lastConfirmedJungleMarker) {
+          const lastObservedArea = formatJungleZone(
+            lastConfirmedJungleZone,
+            ownTeamSide
+          ).replace(/^Jungler\s+/, '').replace(/\.$/, '')
+          jungleLocation.textContent =
+            `Jungler não visível; última posição observada: ${lastObservedArea}`
+          if (!jungleDisappearanceAnnounced) {
+            jungleDisappearanceAnnounced = true
+            setOverlayLastSeenMarker(lastConfirmedJungleMarker)
+            announceEvent(
+              `Jungler desapareceu da visão. Último local observado: ${lastObservedArea}.`
+            )
+          }
+        } else {
+          jungleLocation.textContent = 'Retrato pronto; jungler ainda não visível no minimapa.'
+        }
       }
       return
     }
 
-    jungleMissedScans = 0
-    const distanceFromPending = pendingJunglePoint
-      ? Math.hypot(
-          match.point.x - pendingJunglePoint.x,
-          match.point.y - pendingJunglePoint.y
-        )
-      : Number.POSITIVE_INFINITY
-    if (
+    const candidateIsStable =
       pendingJungleZone === match.zone &&
-      distanceFromPending <= junglePositionStabilityRadius
-    ) {
+      pendingJunglePoint !== null &&
+      Math.hypot(
+        match.point.x - pendingJunglePoint.x,
+        match.point.y - pendingJunglePoint.y
+      ) <= jungleMatchPositionTolerance
+    if (candidateIsStable) {
       pendingJungleZoneScans += 1
     } else {
       pendingJungleZone = match.zone
+      pendingJunglePoint = match.point
       pendingJungleZoneScans = 1
     }
-    pendingJunglePoint = match.point
-    if (pendingJungleZoneScans < 2) return
+    if (pendingJungleZoneScans < jungleMatchConfirmationScans) return
+
+    if (jungleDisappearanceAnnounced) {
+      jungleDisappearanceAnnounced = false
+      setOverlayLastSeenMarker(null)
+    }
+    jungleMissedScans = 0
 
     const message = formatJungleZone(match.zone, ownTeamSide)
     jungleLocation.textContent = `Jungler visível: ${message}`
+    lastConfirmedJungleZone = match.zone
+    lastConfirmedJungleMarker = createOverlayMarker(match)
     if (announcedJungleZone === match.zone) return
 
     announcedJungleZone = match.zone
-    lastConfirmedJungleZone = match.zone
-    announceEvent(message)
+    const isLaneApproach =
+      match.zone === 'top-lane' ||
+      match.zone === 'mid-lane' ||
+      match.zone === 'bot-lane'
+    announceEvent(
+      isLaneApproach
+        ? `${message} Possível ameaça de gank; intenção não confirmada.`
+        : message
+    )
   } catch (error) {
     console.error('Could not inspect the enemy jungler on the minimap.', error)
-    setStatus(
-      error instanceof Error
-        ? `Análise visual ativa; leitura do jungler falhou: ${error.message}`
-        : 'Análise visual ativa; não foi possível ler o jungler.'
-    )
+    setStatus('A análise visual está ativa, mas não foi possível ler o jungler nesta captura.')
   } finally {
     jungleScanInProgress = false
   }
@@ -1691,20 +1539,6 @@ async function readGameClock(): Promise<void> {
     lastClockSampleAt = now
     if (stableClockSamples < 2) return
 
-    if (!laneDetectionEnabled && seconds < laneDetectionStartTime) {
-      setStatus(`Cronômetro ${formatElapsed(seconds)}; aguardando 01:20 para ativar as lanes.`)
-    }
-
-    if (!laneDetectionEnabled && seconds >= laneDetectionStartTime) {
-      laneDetectionEnabled = true
-      resetLaneTracking()
-      setStatus(`Cronômetro ${formatElapsed(seconds)}; detecção automática das lanes ativa.`)
-    }
-    if (laneDetectionEnabled && !rosterPromptAnnounced) {
-      rosterPromptAnnounced = true
-      announceEvent('Os oponentes e suas posições são consultados automaticamente pela API local.')
-    }
-
     if (!voidGrubAlertAnnounced && seconds >= voidGrubAlertTime) {
       voidGrubAlertAnnounced = true
       if (seconds < voidGrubSpawnTime) {
@@ -1720,25 +1554,9 @@ async function readGameClock(): Promise<void> {
     }
   } catch (error) {
     console.error('Could not read the League of Legends game clock.', error)
-    setStatus(
-      error instanceof Error
-        ? `Detecção ativa; leitura do relógio falhou: ${error.message}`
-        : 'Detecção ativa; não foi possível ler o relógio.'
-    )
+    setStatus('A detecção está ativa, mas não foi possível ler o relógio da partida.')
   } finally {
     clockReadInProgress = false
-  }
-}
-
-function estimateMinimapRegion(): Region {
-  const side = Math.round(screen.width * minimapCrop.size)
-  const centerX = screen.width * minimapCrop.x
-  const centerY = screen.height * minimapCrop.y
-  return {
-    left: Math.max(0, Math.round(centerX - side / 2)),
-    top: Math.max(0, Math.round(centerY - side / 2)),
-    right: Math.min(screen.width, Math.round(centerX + side / 2)),
-    bottom: Math.min(screen.height, Math.round(centerY + side / 2))
   }
 }
 
@@ -1774,221 +1592,6 @@ function drawPreview(): void {
   }
 
   matcherContext.drawImage(video, 0, 0, width, height)
-}
-
-function normalizedPoint(x: number, y: number): Point {
-  if (!region) return { x: 0, y: 0 }
-  return {
-    x: (x - region.left) / (region.right - region.left),
-    y: (y - region.top) / (region.bottom - region.top)
-  }
-}
-
-function classifyLane(point: Point): Lane {
-  const distanceToMid = Math.abs(point.x + point.y - 1) / Math.SQRT2
-  if (distanceToMid <= laneBoundary) return 'mid'
-  return point.y < 0.5 ? 'top' : 'bot'
-}
-
-function countMarkersByLane(markers: EnemyMarker[]): Record<Lane, number> {
-  const counts: Record<Lane, number> = { top: 0, mid: 0, bot: 0 }
-  for (const marker of markers) counts[marker.lane] += 1
-  return counts
-}
-
-function findLanePlayer(lane: Lane): EnemyPlayer | undefined {
-  const rosterLane: TeamLane = lane === 'bot' ? 'adc' : lane
-  return enemyPlayers.find(
-    (player) =>
-      player.lane === rosterLane &&
-      player.laneSource !== 'unknown' &&
-      player.portrait !== null
-  )
-}
-
-function laneAlertState(lane: Lane, now: number): string {
-  const watch = laneWatches[lane]
-  if (watch.alerted) return 'alertado'
-  if (!watch.hasBeenSeen) return 'aguardando primeira detecção'
-  if (watch.missingSince === null) return 'sem ausência ativa'
-  if (now - watch.missingSince <= missingAlertDelay) return 'aguardando 5s'
-  if (!findLanePlayer(lane)) return 'jogador da lane não encontrado no roster'
-  return 'pronto para alertar'
-}
-
-function detectEnemyMarkers(image: ImageData): EnemyMarker[] {
-  if (!region) return []
-  const width = image.width
-  const height = image.height
-  if (width <= 0 || height <= 0) return []
-
-  const mask = new Uint8Array(width * height)
-  const visited = new Uint8Array(mask.length)
-  for (let y = 0; y < height; y += 1) {
-    for (let x = 0; x < width; x += 1) {
-      const source = (y * image.width + x) * 4
-      const red = image.data[source]
-      const green = image.data[source + 1]
-      const blue = image.data[source + 2]
-      if (red >= 130 && red - green >= 45 && red - blue >= 35) {
-        mask[y * width + x] = 1
-      }
-    }
-  }
-
-  const queue = new Int32Array(mask.length)
-  const markers: EnemyMarker[] = []
-  const maxMarkerSize = Math.max(10, Math.min(width, height) * 0.22)
-  for (let start = 0; start < mask.length; start += 1) {
-    if (!mask[start] || visited[start]) continue
-    let head = 0
-    let tail = 0
-    let pixels = 0
-    let minX = width
-    let minY = height
-    let maxX = 0
-    let maxY = 0
-    queue[tail++] = start
-    visited[start] = 1
-
-    while (head < tail) {
-      const index = queue[head++]
-      const x = index % width
-      const y = Math.floor(index / width)
-      pixels += 1
-      minX = Math.min(minX, x)
-      minY = Math.min(minY, y)
-      maxX = Math.max(maxX, x)
-      maxY = Math.max(maxY, y)
-      for (let dy = -1; dy <= 1; dy += 1) {
-        for (let dx = -1; dx <= 1; dx += 1) {
-          const nextX = x + dx
-          const nextY = y + dy
-          if (nextX < 0 || nextY < 0 || nextX >= width || nextY >= height) continue
-          const next = nextY * width + nextX
-          if (mask[next] && !visited[next]) {
-            visited[next] = 1
-            queue[tail++] = next
-          }
-        }
-      }
-    }
-
-    const markerWidth = maxX - minX + 1
-    const markerHeight = maxY - minY + 1
-    const aspect = markerWidth / markerHeight
-    if (
-      pixels < minimumMarkerPixels ||
-      markerWidth > maxMarkerSize ||
-      markerHeight > maxMarkerSize ||
-      aspect < 0.4 ||
-      aspect > 2.5
-    ) {
-      continue
-    }
-
-    const center = normalizedPoint(
-      region.left + (minX + maxX) / 2,
-      region.top + (minY + maxY) / 2
-    )
-    markers.push({
-      center,
-      lane: classifyLane(center)
-    })
-  }
-  return markers
-}
-
-function updateLaneCountAlerts(counts: Record<Lane, number>): void {
-  if (
-    !pendingLaneCounts ||
-    pendingLaneCounts.top !== counts.top ||
-    pendingLaneCounts.mid !== counts.mid ||
-    pendingLaneCounts.bot !== counts.bot
-  ) {
-    pendingLaneCounts = counts
-    pendingLaneCountsSince = Date.now()
-    laneCountFrames = 1
-  } else {
-    laneCountFrames += 1
-  }
-
-  if (
-    laneCountFrames >= laneCountDebounceFrames &&
-    (!stableLaneCounts ||
-      stableLaneCounts.top !== counts.top ||
-      stableLaneCounts.mid !== counts.mid ||
-      stableLaneCounts.bot !== counts.bot)
-  ) {
-    stableLaneCounts = counts
-    for (const lane of ['top', 'mid', 'bot'] as const) {
-      const watch = laneWatches[lane]
-      if (counts[lane] > 0) {
-        if (!watch.hasBeenSeen) {
-          watch.hasBeenSeen = true
-          watch.lastVisibleCount = counts[lane]
-        } else if (counts[lane] >= watch.lastVisibleCount) {
-          if (watch.missingSince !== null && watch.alerted && watch.alertCard) {
-            const elapsed = Math.floor((Date.now() - watch.missingSince) / 1000)
-            const title = watch.alertCard.querySelector('strong')
-            if (title) {
-              title.textContent = `${lane.toUpperCase()} laner inimigo reapareceu após ${formatElapsed(elapsed)}.`
-            }
-          }
-          watch.lastVisibleCount = counts[lane]
-          watch.missingSince = null
-          watch.alerted = false
-          watch.alertCard = null
-        } else if (watch.missingSince === null) {
-          watch.missingSince = pendingLaneCountsSince
-        }
-      } else if (watch.hasBeenSeen && watch.missingSince === null) {
-        watch.missingSince = pendingLaneCountsSince
-      }
-    }
-  }
-
-  const now = Date.now()
-  for (const lane of ['top', 'mid', 'bot'] as const) {
-    const watch = laneWatches[lane]
-    if (watch.missingSince === null) continue
-    const elapsedMs = now - watch.missingSince
-    if (elapsedMs > missingAlertDelay && !watch.alerted) {
-      const player = findLanePlayer(lane)
-      if (!player) continue
-      watch.alertCard = announceEvent(`${lane.toUpperCase()} laner inimigo desaparecido.`)
-      watch.alerted = true
-    }
-    if (watch.alertCard && watch.alerted) {
-      const title = watch.alertCard.querySelector('strong')
-      if (title) {
-        title.textContent =
-          `${lane.toUpperCase()} laner inimigo desaparecido — há ${formatElapsed(Math.floor(elapsedMs / 1000))}.`
-      }
-    }
-  }
-
-  if (laneCountFrames >= laneCountDebounceFrames) {
-    pendingLaneCounts = null
-    laneCountFrames = 0
-  }
-}
-
-function resetLaneTracking(): void {
-  stableLaneCounts = null
-  pendingLaneCounts = null
-  pendingLaneCountsSince = 0
-  laneCountFrames = 0
-  enemyMarkers = []
-  for (const lane of ['top', 'mid', 'bot'] as const) {
-    laneWatches[lane] = {
-      hasBeenSeen: false,
-      lastVisibleCount: 0,
-      missingSince: null,
-      alertCard: null,
-      alerted: false
-    }
-  }
 }
 
 function formatElapsed(totalSeconds: number): string {
@@ -2178,24 +1781,10 @@ calibrationCanvas.addEventListener('pointercancel', finishCalibrationDrag)
 function analyzeFrame(): void {
   drawPreview()
   if (screen.width > 0 && screen.height > 0) {
-    region = estimateMinimapRegion()
+    void inspectJungler()
   }
   updateDiagnosticPanel()
   if (calibrationDialog.open) drawCalibrationPreview()
-  void inspectJungler()
-  if (!laneDetectionEnabled || !region || screen.width === 0 || screen.height === 0) return
-
-  const left = Math.max(0, Math.floor(region.left))
-  const top = Math.max(0, Math.floor(region.top))
-  const right = Math.min(screen.width, Math.ceil(region.right))
-  const bottom = Math.min(screen.height, Math.ceil(region.bottom))
-  enemyMarkers = detectEnemyMarkers(
-    matcherContext.getImageData(left, top, right - left, bottom - top)
-  )
-  const laneCounts = countMarkersByLane(enemyMarkers)
-  refreshMissingLaneMinimapVisibility(laneCounts, Date.now())
-  updateLaneCountAlerts(laneCounts)
-  updateDiagnosticPanel()
 }
 
 function stopCapture(): void {
@@ -2214,9 +1803,6 @@ function stopCapture(): void {
     for (const track of activeStream.getTracks()) track.stop()
   }
   video = null
-  region = null
-  enemyMarkers = []
-  resetLaneTracking()
   matcherContext.clearRect(0, 0, screen.width, screen.height)
   if ('speechSynthesis' in window) window.speechSynthesis.cancel()
   void window.companion.setOverlayActive(false).catch((error: unknown) => {
@@ -2275,11 +1861,7 @@ async function discoverGameWindow(): Promise<void> {
       )
     }
   } catch (error) {
-    setStatus(
-      error instanceof Error
-        ? `Não foi possível localizar o jogo: ${error.message}`
-        : 'Não foi possível localizar a janela do jogo.'
-    )
+    setStatus('Não foi possível localizar a janela do jogo.')
   } finally {
     discoveryInProgress = false
   }
@@ -2296,11 +1878,7 @@ async function selectGameWindow(sourceId: string): Promise<boolean> {
     startCaptureButton.disabled = false
     return true
   } catch (error) {
-    setStatus(
-      error instanceof Error
-        ? `Não foi possível selecionar essa janela: ${error.message}`
-        : 'Não foi possível selecionar a janela do jogo.'
-    )
+    setStatus('Não foi possível selecionar essa janela do jogo.')
     return false
   }
 }
@@ -2333,13 +1911,11 @@ startCaptureButton.addEventListener('click', async () => {
     await window.companion.setOverlayActive(true)
     drawPreview()
     updateDiagnosticPanel()
-    region = estimateMinimapRegion()
     resetMatchEvents()
-    roster.hidden = false
-    rosterStatusElement.textContent = 'Conectando à API local da partida...'
-    void refreshLiveClientRoster()
+    junglerStatusElement.textContent = 'Conectando à API local da partida...'
+    void refreshLiveClientJungler()
     rosterRefreshTimer = window.setInterval(() => {
-      void refreshLiveClientRoster()
+      void refreshLiveClientJungler()
     }, liveClientPollInterval)
     stream.getVideoTracks()[0]?.addEventListener('ended', stopCapture)
     stopCaptureButton.disabled = false
@@ -2350,18 +1926,14 @@ startCaptureButton.addEventListener('click', async () => {
       await window.companion.initializeGameOcr()
       if (!stream) return
       clockReaderReady = true
-      setStatus('Lendo o cronômetro do jogo para iniciar a detecção das lanes em 01:20.')
+      setStatus('Lendo o cronômetro do jogo para avisos de objetivos.')
       clockTimer = window.setInterval(() => {
         void readGameClock()
       }, 750)
       void readGameClock()
     } catch (error) {
       console.error('Could not initialize the local OCR engine.', error)
-      setStatus(
-        error instanceof Error
-          ? `Detecção visual ativa; leitura do relógio indisponível: ${error.message}`
-          : 'Detecção visual ativa; leitura do relógio indisponível.'
-      )
+      setStatus('A detecção visual está ativa, mas a leitura do relógio está indisponível.')
     }
   } catch (error) {
     if (stream) {
@@ -2375,11 +1947,7 @@ startCaptureButton.addEventListener('click', async () => {
         'Esta prévia no navegador não suporta a captura configurada. Abra o companion pela janela Electron com npm run dev para capturar o jogo.'
       )
     } else {
-      setStatus(
-        error instanceof Error
-          ? `Não foi possível capturar a janela: ${error.message}`
-          : 'Não foi possível capturar a janela do jogo.'
-      )
+      setStatus('Não foi possível capturar a janela do jogo.')
     }
     if (selectedWindowId) await selectGameWindow(selectedWindowId)
   }
@@ -2387,4 +1955,5 @@ startCaptureButton.addEventListener('click', async () => {
 
 stopCaptureButton.addEventListener('click', stopCapture)
 
+initializeRankedCalendar()
 void discoverGameWindow()

@@ -1,4 +1,4 @@
-# Bronx Analytics — tarefas para a próxima sessão
+# Bronx I.A. — tarefas para a próxima sessão
 
 Use esta lista para retomar o desenvolvimento. A imagem de referência do
 calendário está salva em [`docs/references/pdl-calendar-example.png`](./docs/references/pdl-calendar-example.png).
@@ -6,23 +6,41 @@ O material do Scoutr.gg fornecido pelo usuário é referência de funcionalidade
 e princípios de privacidade, não uma especificação para copiar marca, textos,
 interface ou implementação.
 
-## Prioridades para a próxima sessão
+## Estado das prioridades
 
 ### 1. Calendário de PDL e resultados
 
-- Investigar primeiro fontes oficiais/permitidas para o histórico da própria
-  conta, datas, vitórias/derrotas e variação de PDL por partida. Não presumir
-  que a API de histórico retorne PDL ganho/perdido; separar PDL atual de
-  variações históricas e documentar autenticação, limites e termos de uso.
-- Se não houver fonte autorizada para PDL histórico, propor importação manual
-  ou registro local a partir das partidas futuras; não usar scraping não
-  autorizado, credenciais da conta ou leitura de memória.
-- Criar calendário mensal inspirado na referência: resumo por dia, ganhos e
-  perdas visualmente distintos, total diário e detalhe das partidas ao abrir
-  uma data. Considerar dias vazios, remakes, partidas sem PDL, mudança de
-  temporada/divisão e fuso horário.
+- **Importação automática implementada no app e Worker Cloudflare.** Após
+  configurar o Riot ID e a plataforma, o app consulta no início e a cada
+  15 minutos até 20 partidas solo ranqueadas recentes (Match-V5), resolve o
+  Riot ID com Account-V1 e atualiza elo/PDL com League-V4. O botão
+  **Carregar partidas anteriores** permite paginar para partidas mais antigas.
+  As partidas ficam em armazenamento local e são deduplicadas por Match ID.
+  Selecionar um dia expande seus jogos, campeões e resultados. O app não pede
+  URL de Worker ao jogador; uma URL de serviço precisa ser configurada no build.
+- **Implantação ainda necessária.** O usuário não tem uma chave Riot. Para
+  desenvolvimento, pode obter uma chave temporária no portal Riot; para
+  distribuição pública, deve registrar o produto e obter uma chave de produção
+  aprovada. O Worker mantém a chave como secret; nunca colocá-la no Electron.
+  Para compilar uma versão distribuível, definir `BRONX_RIOT_SYNC_URL` como
+  endereço HTTPS do Worker antes do build. A configuração no código não
+  substitui a implantação do serviço nem fornece uma chave Riot.
+- O app só calcula a variação por partida quando tem snapshots observados do
+  mesmo elo/divisão antes e depois, identifica exatamente uma nova partida e o
+  snapshot anterior tem até duas horas. A API oficial não fornece LP histórico
+  por partida; sem esses snapshots, o delta fica indisponível, sem estimativas.
+- Os ícones dos campeões vêm dos assets locais e aparecem em baixa opacidade.
+  O cadastro manual continua disponível para correções e notas.
+- Os registros ficam em armazenamento local versionado; dados antigos são
+  migrados em memória e preservados ao salvar. Dados inválidos ou falhas de
+  armazenamento são informados sem sobrescrever registros existentes.
+- Antes de publicar: revisar registro/aprovação do produto e políticas Riot,
+  chave de produção, endpoint/Worker configurado no build, limites de taxa e
+  aviso de não endosso.
+- Não adicionar scraping, credenciais de conta, leitura de memória, estimativa
+  de MMR ou uma alternativa ao ranqueamento oficial.
 
-### 2. Lembretes de wards e visão
+### Próxima prioridade: lembretes de wards e visão
 
 - Verificar se a Live Client Data API expõe o número de cargas de sentinela do
   jogador e em qual formato/frequência, antes de desenhar o lembrete.
@@ -77,15 +95,17 @@ viabilidade, regras aplicáveis e privacidade antes de implementação.
   captura local, controles claros de início/parada, retenção e exclusão dos
   arquivos. Não gravar nem enviar clipes automaticamente.
 
-## Concluído nesta sessão: voz sem provedor pago
+## Voz local sem provedor pago
 
 - Removido o ElevenLabs, incluindo chave, síntese remota, interface e IPC.
-- Os alertas usam as vozes TTS instaladas no Windows; o texto não é enviado à
-  nuvem e não é necessária uma assinatura ou chave.
-- O usuário ainda pode selecionar uma voz instalada e ajustar velocidade e tom.
-- A disponibilidade e naturalidade em pt-BR dependem das vozes habilitadas no
-  Windows. Se a qualidade continuar insuficiente, comparar alternativas TTS
-  offline gratuitas, observando licença, tamanho e facilidade de instalação.
+- Mantidas as vozes instaladas no Windows e adicionadas as vozes Piper pt-BR
+  Faber, Cadu e Jeff. A prévia inicia o download explícito do modelo escolhido
+  (cerca de 63 MB); depois a síntese acontece no dispositivo.
+- Os modelos estão fixados numa revisão do repositório público e o arquivo ONNX
+  é verificado por SHA-256 antes de ser armazenado. Os cartões individuais
+  listam os respectivos conjuntos de dados como CC0.
+- A naturalidade das três vozes ainda precisa ser avaliada pelo usuário usando
+  a prévia. Não imitar vozes de dubladores/personagens sem autorização.
 
 ## Princípios técnicos e de privacidade
 
