@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld('companion', {
     ipcRenderer.invoke('overlay:set-active', active),
   publishOverlayAlert: (title: string): void =>
     ipcRenderer.send('overlay:publish-alert', title),
+  notifyOverlayReady: (): void => ipcRenderer.send('overlay:ready'),
   onOverlayAlert: (callback: (title: string) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, title: string): void => callback(title)
     ipcRenderer.on('overlay:alert', listener)
@@ -24,8 +25,6 @@ contextBridge.exposeInMainWorld('companion', {
     ipcRenderer.invoke('game-ocr:initialize'),
   readGameClock: (image: Uint8Array): Promise<{ text: string; confidence: number }> =>
     ipcRenderer.invoke('game-ocr:read-clock', image),
-  readScoreboard: (image: Uint8Array): Promise<{ text: string; confidence: number }> =>
-    ipcRenderer.invoke('game-ocr:read-scoreboard', image),
   stopGameOcr: (): Promise<void> =>
     ipcRenderer.invoke('game-ocr:stop')
 })

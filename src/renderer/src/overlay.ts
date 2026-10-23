@@ -15,3 +15,5 @@ window.companion.onOverlayAlert((title) => {
     hideTimer = null
   }, 7000)
 })
+
+window.companion.notifyOverlayReady()

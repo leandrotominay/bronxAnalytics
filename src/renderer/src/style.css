@@ -74,8 +74,233 @@ button:disabled {
   line-height: 1.5;
 }
 
+.jungler-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  border: 1px solid #454d5e;
+  border-radius: 8px;
+  background: #191e29;
+}
+
+.jungler-card[hidden] {
+  display: none;
+}
+
+.jungler-card img {
+  width: 40px;
+  height: 40px;
+  border: 1px solid #c89b3c;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.jungler-card div {
+  display: grid;
+  gap: 4px;
+}
+
+.jungler-card strong {
+  font-size: 12px;
+}
+
+.jungler-card span {
+  color: #aab2c2;
+  font-size: 11px;
+}
+
+.enemy-roster {
+  display: grid;
+  gap: 8px;
+}
+
+.enemy-roster[hidden] {
+  display: none;
+}
+
+.enemy-roster > button {
+  width: 100%;
+}
+
+.roster-heading {
+  display: grid;
+  gap: 3px;
+}
+
+.roster-heading strong {
+  font-size: 12px;
+}
+
+.roster-heading span {
+  color: #aab2c2;
+  font-size: 11px;
+}
+
+.enemy-player-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.enemy-player {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 56px;
+  padding: 6px;
+  border: 1px solid #343a49;
+  border-radius: 8px;
+  background: #191e29;
+  cursor: grab;
+}
+
+.enemy-player:active {
+  cursor: grabbing;
+}
+
+.enemy-player img,
+.player-portrait-placeholder {
+  flex: 0 0 40px;
+  width: 40px;
+  height: 40px;
+  border: 1px solid #454d5e;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.player-portrait-placeholder {
+  display: grid;
+  place-items: center;
+  color: #818b9f;
+  font-size: 18px;
+}
+
+.player-portrait-placeholder[hidden],
+.enemy-player img[hidden] {
+  display: none;
+}
+
+.enemy-player-details {
+  display: grid;
+  flex: 1;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.enemy-player-champion,
+.enemy-player-lane {
+  min-width: 0;
+  height: 32px;
+  border: 1px solid #454d5e;
+  border-radius: 5px;
+  background: #252b38;
+  color: #f4f5f8;
+  font: inherit;
+  font-size: 11px;
+}
+
+.enemy-player-champion {
+  width: 100%;
+}
+
+.enemy-player-lane {
+  justify-self: end;
+  min-width: 84px;
+  padding: 0 4px;
+}
+
+.enemy-player-suggestion {
+  width: 100%;
+  min-height: 30px;
+  border-color: #8b6a2b;
+  color: #ffe3a0;
+  font-size: 11px;
+}
+
+.portrait-calibration {
+  width: min(96vw, 1080px);
+  max-width: 1080px;
+  max-height: 92vh;
+  padding: 14px;
+  border: 1px solid #454d5e;
+  border-radius: 10px;
+  background: #10131b;
+  color: #f4f5f8;
+}
+
+.portrait-calibration::backdrop {
+  background: rgb(0 0 0 / 78%);
+}
+
+.calibration-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.calibration-header p,
+.calibration-feedback {
+  margin: 5px 0 0;
+  color: #aab2c2;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.calibration-header button {
+  min-width: 72px;
+}
+
+#calibration-preview {
+  display: block;
+  width: 100%;
+  max-height: 64vh;
+  border: 1px solid #454d5e;
+  background: #080a0f;
+  object-fit: contain;
+  touch-action: none;
+}
+
+.calibration-controls {
+  display: grid;
+  grid-template-columns: minmax(130px, 0.8fr) minmax(180px, 1.4fr) auto;
+  align-items: end;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.calibration-controls label {
+  display: grid;
+  gap: 5px;
+  color: #aab2c2;
+  font-size: 12px;
+}
+
+.calibration-controls select,
+.calibration-controls input {
+  width: 100%;
+  min-height: 34px;
+  accent-color: #c89b3c;
+}
+
+.calibration-feedback {
+  min-height: 18px;
+}
+
 #screen-canvas {
   display: none;
+}
+
+@media (max-width: 600px) {
+  .calibration-controls {
+    grid-template-columns: 1fr;
+  }
 }
 
 .event-list {

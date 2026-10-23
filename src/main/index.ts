@@ -21,6 +21,9 @@ const englishDataDirectory = join(
 const leagueWindowTitle = 'League of Legends (TM) Client'
 let mainWindow: BrowserWindow | null = null
 let overlayWindow: BrowserWindow | null = null
+let overlayReady = false
+let overlayActive = false
+let pendingOverlayAlert: string | null = null
 let authorizedCaptureSource: DesktopCapturerSource | null = null
 let ocrWorker: Awaited<ReturnType<typeof createWorker>> | null = null
 let ocrWorkerPromise: Promise<Awaited<ReturnType<typeof createWorker>>> | null = null
@@ -72,6 +75,9 @@ function createWindow(): void {
     authorizedCaptureSource = null
     overlayWindow?.close()
     overlayWindow = null
+    overlayReady = false
+    overlayActive = false
+    pendingOverlayAlert = null
   })
 }
 
@@ -110,6 +116,9 @@ function createOverlayWindow(): void {
   screen.on('display-metrics-changed', updateOverlayBounds)
   overlayWindow.on('closed', () => {
     overlayWindow = null
+    overlayReady = false
+    overlayActive = false
+    pendingOverlayAlert = null
     screen.removeListener('display-metrics-changed', updateOverlayBounds)
   })
 }
@@ -126,11 +135,32 @@ app.whenReady().then(() => {
       throw new Error('Overlay active state must be a boolean.')
     }
     if (!overlayWindow) return
+    overlayActive = active
     if (active) {
       updateOverlayBounds()
-      overlayWindow.showInactive()
+      if (overlayReady) {
+        overlayWindow.showInactive()
+        if (pendingOverlayAlert) {
+          overlayWindow.webContents.send('overlay:alert', pendingOverlayAlert)
+          pendingOverlayAlert = null
+        }
+      }
     } else {
       overlayWindow.hide()
+    }
+  })
+
+  ipcMain.on('overlay:ready', (event) => {
+    if (!overlayWindow || event.sender !== overlayWindow.webContents) {
+      throw new Error('Overlay readiness can only be reported by the overlay window.')
+    }
+    overlayReady = true
+    if (!overlayActive) return
+    updateOverlayBounds()
+    overlayWindow.showInactive()
+    if (pendingOverlayAlert) {
+      overlayWindow.webContents.send('overlay:alert', pendingOverlayAlert)
+      pendingOverlayAlert = null
     }
   })
 
@@ -139,7 +169,11 @@ app.whenReady().then(() => {
     if (typeof title !== 'string' || title.trim().length === 0 || title.length > 240) {
       throw new Error('Overlay alert text is invalid.')
     }
-    overlayWindow?.webContents.send('overlay:alert', title)
+    if (!overlayWindow || !overlayReady) {
+      pendingOverlayAlert = title
+      return
+    }
+    overlayWindow.webContents.send('overlay:alert', title)
   })
 
   ipcMain.handle('game-ocr:initialize', async (event) => {
@@ -152,7 +186,7 @@ app.whenReady().then(() => {
         ocrWorker = worker
         await worker.setParameters({
           tessedit_char_whitelist: '0123456789:',
-          tessedit_pageseg_mode: PSM.SINGLE_LINE
+          tessedit_pageseg_mode: PSM.SINGLE_BLOCK
         })
         return worker
       })
@@ -178,29 +212,9 @@ app.whenReady().then(() => {
     return enqueueOcr(async () => {
       await ocrWorker!.setParameters({
         tessedit_char_whitelist: '0123456789:',
-        tessedit_pageseg_mode: PSM.SINGLE_LINE
+        tessedit_pageseg_mode: PSM.SINGLE_BLOCK
       })
       const result = await ocrWorker!.recognize(Buffer.from(image))
-      return { text: result.data.text, confidence: result.data.confidence }
-    })
-  })
-
-  ipcMain.handle('game-ocr:read-scoreboard', async (event, image: unknown) => {
-    assertMainWindowSender(event.sender)
-    if (!(image instanceof Uint8Array) || image.byteLength === 0 || image.byteLength > 4_000_000) {
-      throw new Error('Invalid scoreboard image.')
-    }
-    if (!ocrWorker) throw new Error('The local OCR worker is not initialized.')
-    return enqueueOcr(async () => {
-      await ocrWorker!.setParameters({
-        tessedit_char_whitelist: '',
-        tessedit_pageseg_mode: PSM.AUTO
-      })
-      const result = await ocrWorker!.recognize(Buffer.from(image))
-      await ocrWorker!.setParameters({
-        tessedit_char_whitelist: '0123456789:',
-        tessedit_pageseg_mode: PSM.SINGLE_LINE
-      })
       return { text: result.data.text, confidence: result.data.confidence }
     })
   })
