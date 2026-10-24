@@ -1,6 +1,6 @@
 {
   "name": "bronx-ia",
-  "productName": "Bronx I.A.",
+  "productName": "Bronx I.A",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -26,7 +26,8 @@
     "@diffusionstudio/piper-wasm": "^1.0.0",
     "@mintplex-labs/piper-tts-web": "^1.0.5",
     "@tesseract.js-data/eng": "^1.0.0",
-    "onnxruntime-web": "^1.18.0",
+    "onnxruntime-web": "^1.30.0",
+    "pocket-tts-js": "^0.1.0",
     "tesseract.js": "^7.0.0"
   }
 }

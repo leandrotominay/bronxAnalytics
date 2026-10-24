@@ -1,9 +1,14 @@
 import { resolve } from 'node:path'
 import { defineConfig, externalizeDepsPlugin } from 'electron-vite'
 
+const localOrtAssetNames = new Set([
+  'ort.min.mjs',
+  'ort-wasm-simd-threaded.mjs',
+  'ort-wasm-simd-threaded.wasm'
+])
 const rendererAssetFileNames = (assetInfo: { name?: string }): string =>
-  assetInfo.name?.includes('ort-wasm-simd.wasm')
-    ? 'assets/ort-wasm-simd.wasm'
+  assetInfo.name && localOrtAssetNames.has(assetInfo.name)
+    ? `assets/${assetInfo.name}`
     : 'assets/[name]-[hash][extname]'
 
 export default defineConfig({
@@ -36,6 +41,9 @@ export default defineConfig({
   },
   renderer: {
     root: resolve(__dirname, 'src/renderer'),
+    optimizeDeps: {
+      exclude: ['pocket-tts-js']
+    },
     worker: {
       format: 'es',
       rollupOptions: {

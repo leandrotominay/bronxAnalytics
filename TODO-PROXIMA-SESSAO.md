@@ -1,4 +1,4 @@
-# Bronx I.A. — tarefas para a próxima sessão
+# Bronx I.A — tarefas para a próxima sessão
 
 Use esta lista para retomar o desenvolvimento. A imagem de referência do
 calendário está salva em [`docs/references/pdl-calendar-example.png`](./docs/references/pdl-calendar-example.png).

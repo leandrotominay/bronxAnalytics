@@ -7,16 +7,17 @@
       http-equiv="Content-Security-Policy"
       content="default-src 'self'; connect-src 'self' https://huggingface.co https://cdn-lfs.huggingface.co https://cas-bridge.xethub.hf.co; img-src 'self' data: https://ddragon.leagueoflegends.com; media-src 'self' blob:; style-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:"
     />
+    <link rel="icon" href="./assets/bronx-radar.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="/src/style.css" />
     <meta name="theme-color" content="#101012" />
-    <title>Bronx I.A.</title>
+    <title>Bronx I.A</title>
   </head>
   <body>
     <main class="app-shell">
       <header class="window-titlebar" aria-label="Barra da janela">
         <div class="window-titlebar-brand">
-          <span class="window-titlebar-mark" aria-hidden="true">B</span>
-          <span>Bronx I.A.</span>
+          <img class="window-titlebar-mark" src="./assets/bronx-radar.svg" alt="" />
+          <span>Bronx I.A</span>
         </div>
         <div class="window-titlebar-controls">
           <button id="window-minimize" class="window-control" type="button" aria-label="Minimizar janela">
@@ -33,8 +34,8 @@
       </header>
       <aside class="sidebar" aria-label="Navegação principal">
         <div class="brand">
-          <span class="brand-mark" aria-hidden="true">B</span>
-          <span class="brand-name">BRONX<span>I.A.</span></span>
+          <img class="brand-mark" src="./assets/bronx-radar.svg" alt="" />
+          <span class="brand-name">BRONX<span>IA</span></span>
         </div>
         <div class="sidebar-divider"></div>
         <span class="sidebar-caption">NAVEGAÇÃO</span>
@@ -91,21 +92,17 @@
           </button>
         </nav>
         <div class="sidebar-bottom">
-          <span class="sidebar-build">BETA · LOCAL</span>
+          <span class="sidebar-build">RELEASE V1.203</span>
         </div>
       </aside>
       <div class="workspace">
         <header class="topbar">
           <div class="topbar-title">
             <span class="eyebrow">LEAGUE OF LEGENDS</span>
-            <h1 id="page-title">Bem-vindo ao Bronx I.A.</h1>
+            <h1 id="page-title">Bem-vindo ao Bronx I.A</h1>
           </div>
           <div class="topbar-actions">
-            <span class="connection-indicator" aria-hidden="true"></span>
-            <span id="status" class="capture-status" role="status">Procurando o jogo...</span>
-            <button id="voice-settings-button" class="voice-settings-button" type="button">
-              Voz dos alertas
-            </button>
+            <span id="status" class="capture-status" role="status" data-state="searching">Ainda não encontrei a janela da partida. Vou procurar novamente automaticamente.</span>
           </div>
         </header>
 
@@ -113,7 +110,7 @@
           <section class="home-hero">
             <div class="home-hero-backdrop" aria-hidden="true"></div>
             <div class="home-hero-copy">
-              <span class="eyebrow">IA EM DESENVOLVIMENTO · DETECÇÃO DE JUNGLER</span>
+              <span class="eyebrow">INTELIGENCIA ARTIFICIAL · DETECÇÃO DE JUNGLER</span>
               <p class="home-kicker">INTELIGÊNCIA TÁTICA PARA A SELVA</p>
               <h2 id="home-title">A selva deixa<br /><span>rastros.</span></h2>
               <p class="home-description">
@@ -131,10 +128,30 @@
               </div>
               <div class="home-hero-actions">
                 <button class="primary-button home-action-button" type="button" data-page-target="match">
-                  Iniciar Tracker <span aria-hidden="true">↗</span>
+                  <span class="home-cta-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24">
+                      <circle cx="12" cy="12" r="7.5" />
+                      <circle cx="12" cy="12" r="2" />
+                      <path d="M12 2v3m0 14v3M2 12h3m14 0h3" />
+                    </svg>
+                  </span>
+                  <span class="home-cta-copy">
+                    <strong>Iniciar Tracker</strong>
+                  </span>
+                  <span class="home-cta-arrow" aria-hidden="true">↗</span>
                 </button>
                 <button class="secondary-button home-calendar-button" type="button" data-page-target="calendar">
-                  Perfil
+                  <span class="home-cta-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24">
+                      <circle cx="12" cy="8" r="3.25" />
+                      <path d="M5 20c.6-3.5 3.1-5.25 7-5.25s6.4 1.75 7 5.25M4 4v3m0 0h3m-3 0 4-4" />
+                    </svg>
+                  </span>
+                  <span class="home-cta-copy">
+                    <strong>Perfil</strong>
+                    <small>Histórico e evolução</small>
+                  </span>
+                  <span class="home-cta-arrow" aria-hidden="true">↗</span>
                 </button>
               </div>
             </div>
@@ -160,7 +177,6 @@
                 <span class="radar-coordinate">JUNGLE TRACKING · VISUAL SCAN</span>
               </div>
             </div>
-            <span class="home-hero-index" aria-hidden="true">01 / 03</span>
           </section>
           <section class="home-feature-grid" aria-label="Acesso rápido">
             <button class="home-feature-card" type="button" data-page-target="match">
@@ -199,7 +215,7 @@
               <div>
                 <span class="eyebrow">PERSONALIZAÇÃO</span>
                 <h2>Voz dos alertas</h2>
-                <p>Use Piper offline ou uma voz instalada no Windows. O texto dos alertas não é enviado a serviços de voz.</p>
+                <p>Use a voz original Faber do Piper offline ou uma voz instalada no Windows. O texto dos alertas não é enviado a serviços de voz.</p>
               </div>
               <button id="test-voice-button" class="secondary-button" type="button">▶ Ouvir prévia / baixar</button>
             </div>
@@ -241,7 +257,7 @@
         <section class="match-toolbar" aria-label="Controles da partida">
           <div>
             <span class="eyebrow">SESSÃO ATUAL</span>
-            <p>Rastreamento do jungler e avisos de objetivos, sem previsões de posição oculta.</p>
+            <p>Rastreamento visual do jungler e previsões de full clear, Aronguejo e objetivos pelo tempo da partida.</p>
           </div>
           <div class="controls">
             <button id="start-button" class="primary-button" type="button" disabled>
@@ -259,7 +275,7 @@
                 <h2>Jungler inimigo</h2>
               </div>
               <div class="card-actions">
-                <button id="calibrate-minimap-button" class="text-button" type="button">Ajustar minimapa</button>
+                <span class="minimap-scale-hint">Sugestão de escala do minimapa: 45</span>
                 <span class="live-tag"><span></span> APENAS JUNGLER</span>
               </div>
             </div>
@@ -275,6 +291,36 @@
             </p>
           </section>
         </div>
+
+        <section class="timeline-alerts" aria-labelledby="timeline-alerts-title">
+          <div class="timeline-alerts-heading">
+            <div>
+              <span class="eyebrow">ALERTAS POR TEMPO DE PARTIDA</span>
+              <h2 id="timeline-alerts-title">Full clear e objetivos</h2>
+            </div>
+            <span class="timeline-alerts-tag">PREVISÕES</span>
+          </div>
+          <div class="timeline-alerts-grid">
+            <article class="timeline-alert-item">
+              <span class="timeline-alert-time">02:40</span>
+              <strong>Full clear estimado</strong>
+              <p>O jungler pode ter concluído a selva e estar procurando uma oportunidade de gank.</p>
+              <span class="timeline-alert-time timeline-alert-time-secondary">03:15 · Aronguejo</span>
+              <p>O jungler pode estar no rio; fique atento a uma possível tentativa de gank.</p>
+            </article>
+            <article class="timeline-alert-item">
+              <span class="timeline-alert-time">14:30 <i>·</i> 15:00</span>
+              <strong>Arauto</strong>
+              <p>Aviso 30 segundos antes e outro no horário previsto de surgimento.</p>
+            </article>
+            <article class="timeline-alert-item">
+              <span class="timeline-alert-time">19:00 <i>·</i> 20:00</span>
+              <strong>Barão</strong>
+              <p>Aviso 1 minuto antes e outro no horário previsto de surgimento.</p>
+            </article>
+          </div>
+          <p class="timeline-alerts-note">Previsões baseadas no cronômetro, não confirmações. Sem um benchmark atual e confiável por campeão, usamos o padrão conservador de 02:40 para full clear e 03:15 para Aronguejo.</p>
+        </section>
 
         <section id="developer-tools" class="developer-tools" hidden>
           <div class="developer-heading">
@@ -460,7 +506,7 @@
             <ol id="calendar-match-list" class="calendar-match-list"></ol>
           </details>
           <p class="riot-legal-disclaimer">
-            Bronx I.A. is not endorsed by Riot Games and does not reflect the views or opinions of Riot Games or anyone officially involved in producing or managing Riot Games properties. Riot Games and all associated properties are trademarks or registered trademarks of Riot Games, Inc.
+            Bronx I.A is not endorsed by Riot Games and does not reflect the views or opinions of Riot Games or anyone officially involved in producing or managing Riot Games properties. Riot Games and all associated properties are trademarks or registered trademarks of Riot Games, Inc.
           </p>
         </section>
       </div>

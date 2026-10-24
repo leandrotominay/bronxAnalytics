@@ -1,4 +1,4 @@
-# Contexto para continuar o Bronx I.A.
+# Contexto para continuar o Bronx I.A
 
 Este documento registra o estado do projeto para retomar o trabalho em outra
 sessão. Leia-o junto com `README.md` e confira o código atual antes de alterar
@@ -24,7 +24,7 @@ tentar inferir a posição de inimigos não visíveis.
 ## Tecnologia e execução
 
 - Electron 45, TypeScript, electron-vite e Vite.
-- Nome visível: **Bronx I.A.**. O monograma original vermelho com “B”
+- Nome visível: **Bronx I.A**. O monograma original vermelho com “B”
   está em `resources/bronx-analytics.ico` e é usado como ícone da janela.
 - A interface agora é um dashboard escuro com acentos cobre/âmbar, barra de
   título customizada sem o menu padrão do Electron e três espaços reservados
@@ -56,7 +56,7 @@ tentar inferir a posição de inimigos não visíveis.
 - A sincronização ainda depende da implantação do Worker e da chave Riot. O
   usuário não tem chave atualmente; chave de desenvolvimento serve apenas para
   teste privado, expira em 24 horas. Antes de distribuir o produto, registrar
-  Bronx I.A. no portal Riot e obter uma chave de produção aprovada.
+  Bronx I.A no portal Riot e obter uma chave de produção aprovada.
   O usuário pediu importação automática (não cadastro jogo a jogo) e escolheu
   Cloudflare Workers. O app já inicia/a cada 15 min chama o Worker configurado
   via `BRONX_RIOT_SYNC_URL` (em desenvolvimento, `localhost:8787`), importa

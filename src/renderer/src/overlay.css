@@ -28,32 +28,83 @@ body {
   justify-content: flex-start;
   width: 100%;
   height: 100%;
-  padding: 7vh 2vw;
+  padding: 6vh 2vw;
   pointer-events: none;
 }
 
 .overlay-alert {
-  max-width: min(520px, 45vw);
-  padding: 16px 20px;
-  border: 1px solid rgb(239 53 88 / 70%);
-  border-left: 5px solid #ef3558;
-  border-radius: 7px;
-  background: rgb(20 19 22 / 94%);
-  box-shadow: 0 8px 28px rgb(0 0 0 / 45%);
-  color: #fff;
-  font-size: clamp(18px, 1.55vw, 28px);
-  font-weight: 700;
-  line-height: 1.35;
+  position: relative;
+  overflow: hidden;
+  max-width: min(480px, 45vw);
+  padding: 31px 23px 19px;
+  border: 1px solid rgb(244 161 88 / 42%);
+  border-radius: 12px;
+  background:
+    radial-gradient(ellipse at 100% 0%, rgb(232 86 35 / 19%), transparent 52%),
+    linear-gradient(110deg, rgb(12 11 13 / 97%), rgb(20 18 17 / 94%));
+  box-shadow:
+    0 16px 48px rgb(0 0 0 / 58%),
+    inset 0 0 42px rgb(230 104 45 / 7%);
+  color: #fff8ef;
+  font-family: "Segoe UI Variable Display", "Aptos Display", "Bahnschrift", "Segoe UI", sans-serif;
+  font-size: clamp(18px, 1.6vw, 28px);
+  font-weight: 760;
+  letter-spacing: -0.025em;
+  line-height: 1.25;
+  text-shadow: 0 2px 18px rgb(244 133 66 / 15%);
   opacity: 0;
-  transform: translateX(-12px);
+  transform: translateY(-10px) scale(0.98);
   transition:
     opacity 160ms ease-out,
     transform 160ms ease-out;
 }
 
+.overlay-alert::before {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 3px;
+  background: linear-gradient(90deg, #f4a65d, #e85a32 65%, transparent);
+  content: "";
+}
+
+.overlay-alert::after {
+  position: absolute;
+  top: 13px;
+  left: 26px;
+  color: #e8b47d;
+  content: "BRONX  /  ALERTA DO TRACKER";
+  font-family: "Segoe UI", sans-serif;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  line-height: 1;
+}
+
 .overlay-alert.is-visible {
   opacity: 1;
-  transform: translateX(0);
+  transform: translateY(0) scale(1);
+}
+
+.overlay-alert.is-disappearance {
+  max-width: min(440px, 42vw);
+  padding: 29px 21px 17px;
+  font-size: clamp(16px, 1.4vw, 24px);
+}
+
+.overlay-alert.is-disappearance::after {
+  left: 21px;
+}
+
+@media (max-width: 900px) {
+  .overlay-alert {
+    max-width: min(480px, 65vw);
+  }
+
+  .overlay-alert.is-disappearance {
+    max-width: min(440px, 60vw);
+  }
 }
 
 .overlay-last-seen-marker {

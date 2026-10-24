@@ -1,6 +1,9 @@
 /// <reference types="vite/client" />
 
 import championCatalog from '../assets/champions.json'
+import { PocketTTS, type ProgressInfo } from 'pocket-tts-js'
+import ortRuntimeUrl from '../../../node_modules/onnxruntime-web/dist/ort.min.mjs?url'
+import ortWasmModuleUrl from '../../../node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.mjs?url'
 import type { LiveClientJunglerResult } from '../../shared/live-client-data'
 import type { OverlayMarker } from '../../shared/overlay'
 import type { RiotSyncRequest, RiotSyncResponse } from '../../shared/riot-sync'
@@ -55,9 +58,6 @@ const junglerCard = document.querySelector<HTMLElement>('#jungler-card')
 const junglerPortraitImage = document.querySelector<HTMLImageElement>('#jungler-portrait')
 const junglerLocationText = document.querySelector<HTMLElement>('#jungler-location')
 const junglerStatus = document.querySelector<HTMLElement>('#jungler-status')
-const calibrateMinimapButton = document.querySelector<HTMLButtonElement>(
-  '#calibrate-minimap-button'
-)
 const minimapCalibrationDialog = document.querySelector<HTMLDialogElement>(
   '#minimap-calibration'
 )
@@ -101,7 +101,6 @@ if (
   !junglerPortraitImage ||
   !junglerLocationText ||
   !junglerStatus ||
-  !calibrateMinimapButton ||
   !minimapCalibrationDialog ||
   !calibrationPreview ||
   !calibrationSizeInput ||
@@ -137,7 +136,6 @@ const jungleLocation = junglerLocationText
 const junglerStatusElement = junglerStatus
 const calibrationCanvas = calibrationPreview
 const calibrationDialog = minimapCalibrationDialog
-const calibrateMinimapControl = calibrateMinimapButton
 const calibrationSizeControl = calibrationSizeInput
 const calibrationFeedbackElement = calibrationFeedback
 const calibrationResolutionElement = calibrationResolution
@@ -218,16 +216,45 @@ const championImageUrls = import.meta.glob<string>('../assets/champions/*.png', 
   import: 'default',
   query: '?url'
 })
-
 type Point = { x: number; y: number }
 type Region = { left: number; top: number; right: number; bottom: number }
 type AlertVoicePreferences = { voiceURI: string; rate: number; pitch: number }
+const pocketVoiceLabels = {
+  alba: 'Alba',
+  azelma: 'Azelma'
+} as const
+type PocketVoiceId = keyof typeof pocketVoiceLabels
+const removedPocketVoiceIds = new Set([
+  'cosette',
+  'eponine',
+  'fantine',
+  'javert',
+  'jean',
+  'marius'
+])
 const piperVoiceLabels = {
   'pt_BR-faber-medium': 'Faber',
-  'pt_BR-cadu-medium': 'Cadu',
   'pt_BR-jeff-medium': 'Jeff'
 } as const
 type PiperVoiceId = keyof typeof piperVoiceLabels
+const piperVoiceProfiles = {
+  'pt_BR-faber-medium': {
+    voiceId: 'pt_BR-faber-medium',
+    label: 'Faber · original',
+    rate: 1,
+    pitch: 1
+  },
+  'pt_BR-jeff-medium': {
+    voiceId: 'pt_BR-jeff-medium',
+    label: 'Jeff · original',
+    rate: 1,
+    pitch: 1
+  }
+} as const satisfies Record<
+  string,
+  { voiceId: PiperVoiceId; label: string; rate: number; pitch: number }
+>
+type PiperVoiceProfileId = keyof typeof piperVoiceProfiles
 class VoiceSelectionChangedError extends Error {
   constructor() {
     super('A voz selecionada foi alterada.')
@@ -271,6 +298,12 @@ const jungleZoneAnnouncementCooldownMs = 5_000
 const liveClientPollInterval = 1000
 const voidGrubAlertTime = 7 * 60
 const voidGrubSpawnTime = 8 * 60
+const estimatedFullClearTime = 2 * 60 + 40
+const estimatedCrabTime = 3 * 60 + 15
+const heraldReminderTime = 14 * 60 + 30
+const heraldSpawnTime = 15 * 60
+const baronReminderTime = 19 * 60
+const baronSpawnTime = 20 * 60
 const minimapRingSamplePoints = Array.from({ length: 16 }, (_, index) => {
   const angle = (index * 2 * Math.PI) / 16
   return [0.5 + Math.cos(angle) * 0.46, 0.5 + Math.sin(angle) * 0.46]
@@ -292,7 +325,7 @@ let clockReadInProgress = false
 let clockReaderReady = false
 let rosterRefreshTimer: number | null = null
 let rosterRefreshInProgress = false
-let voidGrubAlertAnnounced = false
+let announcedMatchTimeAlerts = new Set<string>()
 let lastRecognizedClock: number | null = null
 let stableClockCandidate: number | null = null
 let stableClockSamples = 0
@@ -330,7 +363,7 @@ let minimapCrop = defaultMinimapCrop()
 let diagnosticMode = false
 let alertVoiceStorageWarning: string | null = null
 let alertVoicePreferences: AlertVoicePreferences = {
-  voiceURI: 'piper:pt_BR-jeff-medium',
+  voiceURI: 'piper:pt_BR-faber-medium',
   rate: 1,
   pitch: 1
 }
@@ -342,7 +375,22 @@ let voiceEngineRequests = new Map<
   { resolve: (blob: Blob | null) => void; reject: (error: Error) => void }
 >()
 let voiceAudioContext: AudioContext | null = null
-let activePiperAudio: AudioBufferSourceNode | null = null
+let activeVoiceAudio: AudioBufferSourceNode | null = null
+let pocketTtsEngine: PocketTTS | null = null
+let pocketTtsEngineLoad: Promise<PocketTTS> | null = null
+let pocketTtsProgressHandler: ((info: ProgressInfo) => void) | null = null
+const pocketTtsVoices = new Map<PocketVoiceId, string>()
+let pocketTtsQueue: Promise<void> = Promise.resolve()
+let pocketTtsSpeechRequest = 0
+
+function localOrtRuntimeBaseUrl(): string {
+  const runtimeBase = new URL('.', new URL(ortRuntimeUrl, import.meta.url))
+  const wasmModuleBase = new URL('.', new URL(ortWasmModuleUrl, import.meta.url))
+  if (runtimeBase.href !== wasmModuleBase.href) {
+    throw new Error('Os arquivos locais do runtime ONNX não estão no mesmo diretório.')
+  }
+  return runtimeBase.href
+}
 let lastJungleScanDiagnostics: MinimapScanDiagnostics = {
   status: 'not-run',
   point: null,
@@ -376,14 +424,32 @@ function loadAlertVoicePreferences(): void {
     ) {
       throw new Error('As preferências salvas de voz têm um formato inválido.')
     }
+    const selectedVoiceURI = legacyPreferences
+      ? 'piper:pt_BR-jeff-medium'
+      : parsed.voiceURI.startsWith('piper:') &&
+          parsed.voiceURI !== 'piper:pt_BR-faber-medium' &&
+          parsed.voiceURI !== 'piper:pt_BR-jeff-medium'
+        ? parsed.voiceURI.includes('jeff')
+          ? 'piper:pt_BR-jeff-medium'
+          : 'piper:pt_BR-faber-medium'
+        : parsed.voiceURI.startsWith('pocket:') &&
+            removedPocketVoiceIds.has(parsed.voiceURI.slice('pocket:'.length))
+          ? 'pocket:alba'
+          : parsed.voiceURI
     alertVoicePreferences = {
-      voiceURI: legacyPreferences
-        ? 'piper:pt_BR-jeff-medium'
-        : parsed.voiceURI,
-      rate: Math.min(1.25, Math.max(0.75, parsed.rate)),
-      pitch: Math.min(1.3, Math.max(0.7, parsed.pitch))
+      voiceURI: selectedVoiceURI,
+      rate: selectedVoiceURI.startsWith('piper:') || selectedVoiceURI.startsWith('pocket:')
+        ? 1
+        : Math.min(1.25, Math.max(0.75, parsed.rate)),
+      pitch: selectedVoiceURI.startsWith('piper:') || selectedVoiceURI.startsWith('pocket:')
+        ? 1
+        : Math.min(1.3, Math.max(0.7, parsed.pitch))
     }
-    if (legacyPreferences) {
+    if (
+      selectedVoiceURI !== parsed.voiceURI ||
+      alertVoicePreferences.rate !== parsed.rate ||
+      alertVoicePreferences.pitch !== parsed.pitch
+    ) {
       window.localStorage.setItem(alertVoiceStorageKey, JSON.stringify(alertVoicePreferences))
     }
   } catch (error) {
@@ -416,8 +482,41 @@ function updateAlertVoiceOutputs(): void {
 
 function piperVoiceFromURI(uri: string): PiperVoiceId | null {
   if (!uri.startsWith('piper:')) return null
-  const voiceId = uri.slice('piper:'.length)
-  return Object.hasOwn(piperVoiceLabels, voiceId) ? (voiceId as PiperVoiceId) : null
+  const profileId = uri.slice('piper:'.length)
+  if (Object.hasOwn(piperVoiceProfiles, profileId)) {
+    return piperVoiceProfiles[profileId as PiperVoiceProfileId].voiceId
+  }
+  return Object.hasOwn(piperVoiceLabels, profileId)
+    ? (profileId as PiperVoiceId)
+    : null
+}
+
+function piperVoiceProfileFromURI(uri: string) {
+  if (!uri.startsWith('piper:')) return null
+  const profileId = uri.slice('piper:'.length)
+  return Object.hasOwn(piperVoiceProfiles, profileId)
+    ? piperVoiceProfiles[profileId as PiperVoiceProfileId]
+    : null
+}
+
+function piperVoiceLabelFromURI(uri: string): string | null {
+  const profile = piperVoiceProfileFromURI(uri)
+  if (profile) return profile.label
+  const voiceId = piperVoiceFromURI(uri)
+  return voiceId ? piperVoiceLabels[voiceId] : null
+}
+
+function pocketVoiceFromURI(uri: string): PocketVoiceId | null {
+  if (!uri.startsWith('pocket:')) return null
+  const voiceId = uri.slice('pocket:'.length)
+  return Object.hasOwn(pocketVoiceLabels, voiceId)
+    ? (voiceId as PocketVoiceId)
+    : null
+}
+
+function pocketVoiceLabelFromURI(uri: string): string | null {
+  const voiceId = pocketVoiceFromURI(uri)
+  return voiceId ? pocketVoiceLabels[voiceId] : null
 }
 
 function rejectVoiceEngineRequests(error: Error): void {
@@ -482,11 +581,13 @@ function requestVoiceEngine(
   })
 }
 
-async function playPiperAudio(blob: Blob, onEnded?: () => void): Promise<void> {
+async function playVoiceAudioBuffer(
+  buffer: AudioBuffer,
+  onEnded?: () => void
+): Promise<void> {
   voiceAudioContext ??= new AudioContext()
   if (voiceAudioContext.state === 'suspended') await voiceAudioContext.resume()
-  const buffer = await voiceAudioContext.decodeAudioData(await blob.arrayBuffer())
-  stopPiperAudio()
+  stopLocalVoiceAudio()
 
   const source = voiceAudioContext.createBufferSource()
   source.buffer = buffer
@@ -497,21 +598,149 @@ async function playPiperAudio(blob: Blob, onEnded?: () => void): Promise<void> {
   source.addEventListener(
     'ended',
     () => {
-      if (activePiperAudio === source) {
-        activePiperAudio = null
+      if (activeVoiceAudio === source) {
+        activeVoiceAudio = null
         onEnded?.()
       }
     },
     { once: true }
   )
-  activePiperAudio = source
+  activeVoiceAudio = source
   source.start()
 }
 
-function stopPiperAudio(): void {
-  const source = activePiperAudio
-  activePiperAudio = null
+async function playPiperAudio(blob: Blob, onEnded?: () => void): Promise<void> {
+  voiceAudioContext ??= new AudioContext()
+  if (voiceAudioContext.state === 'suspended') await voiceAudioContext.resume()
+  const buffer = await voiceAudioContext.decodeAudioData(await blob.arrayBuffer())
+  await playVoiceAudioBuffer(buffer, onEnded)
+}
+
+async function playPocketTtsAudio(
+  chunks: Float32Array[],
+  sampleRate: number,
+  onEnded?: () => void
+): Promise<void> {
+  const sampleCount = chunks.reduce((total, chunk) => total + chunk.length, 0)
+  if (sampleCount === 0) throw new Error('O mecanismo local não retornou áudio.')
+  const samples = new Float32Array(sampleCount)
+  let offset = 0
+  for (const chunk of chunks) {
+    samples.set(chunk, offset)
+    offset += chunk.length
+  }
+  voiceAudioContext ??= new AudioContext()
+  const buffer = voiceAudioContext.createBuffer(1, samples.length, sampleRate)
+  buffer.copyToChannel(samples, 0)
+  await playVoiceAudioBuffer(buffer, onEnded)
+}
+
+function stopLocalVoiceAudio(): void {
+  const source = activeVoiceAudio
+  activeVoiceAudio = null
   if (source) source.stop()
+}
+
+function updatePocketTtsProgress(info: ProgressInfo): void {
+  if (info.type === 'progress' && info.total) {
+    const percent = Math.min(100, Math.round((info.loaded ?? 0) / info.total * 100))
+    const cached = info.fromCache ? ' · cache local' : ''
+    voiceSettingsStatusElement.textContent =
+      `Preparando as vozes Pocket TTS${info.label ? ` (${info.label})` : ''}: ${percent}%${cached}.`
+    return
+  }
+  const status = info.status === 'loading-runtime'
+    ? 'Baixando o mecanismo local de voz...'
+    : 'Carregando as vozes Pocket TTS localmente...'
+  voiceSettingsStatusElement.textContent = status
+}
+
+function getPocketTtsEngine(
+  onProgress?: (info: ProgressInfo) => void
+): Promise<PocketTTS> {
+  if (pocketTtsEngine?.ready) return Promise.resolve(pocketTtsEngine)
+  if (pocketTtsEngineLoad) {
+    pocketTtsProgressHandler = onProgress ?? null
+    return pocketTtsEngineLoad
+  }
+  const engine = new PocketTTS({
+    language: 'portuguese',
+    quantized: true,
+    voiceCloning: false,
+    modelBaseUrl:
+      'https://huggingface.co/vlapky/pocket-tts-onnx/resolve/c469236dbc5f68287fa2fbf175b66de3b80123af/onnx',
+    ortBaseUrl: localOrtRuntimeBaseUrl(),
+    maxThreads: 1,
+    cache: true,
+    cacheName: 'bronx-pocket-tts-v1'
+  })
+  pocketTtsEngine = engine
+  pocketTtsProgressHandler = onProgress ?? null
+  pocketTtsEngineLoad = engine
+    .load((info) => pocketTtsProgressHandler?.(info))
+    .then((bundle) => {
+      if (!bundle) throw new Error('O modelo Pocket TTS não retornou os dados de idioma.')
+      const missingVoices = Object.keys(pocketVoiceLabels).filter(
+        (voiceId) => !bundle.predefinedVoices.includes(voiceId)
+      )
+      if (missingVoices.length > 0) {
+        throw new Error(`Vozes Pocket TTS indisponíveis: ${missingVoices.join(', ')}.`)
+      }
+      return engine
+    })
+    .catch((error: unknown) => {
+      engine.destroy()
+      if (pocketTtsEngine === engine) pocketTtsEngine = null
+      throw error
+    })
+    .finally(() => {
+      pocketTtsEngineLoad = null
+      pocketTtsProgressHandler = null
+    })
+  return pocketTtsEngineLoad
+}
+
+async function getPocketTtsVoice(voiceId: PocketVoiceId): Promise<string> {
+  const cachedVoice = pocketTtsVoices.get(voiceId)
+  if (cachedVoice) return cachedVoice
+  if (!pocketTtsEngine) throw new Error('O mecanismo Pocket TTS ainda não foi carregado.')
+  const voice = await pocketTtsEngine.loadVoice(voiceId)
+  pocketTtsVoices.set(voiceId, voice)
+  return voice
+}
+
+function speakPocketTtsLocally(text: string, voiceId: PocketVoiceId): void {
+  const requestId = ++pocketTtsSpeechRequest
+  const queuedSpeech = pocketTtsQueue.then(async () => {
+    const engine = await getPocketTtsEngine(updatePocketTtsProgress)
+    const voice = await getPocketTtsVoice(voiceId)
+    const chunks: Float32Array[] = []
+    await engine.generate(text, {
+      voice,
+      onChunk: (chunk) => chunks.push(chunk)
+    })
+    if (
+      requestId !== pocketTtsSpeechRequest ||
+      alertVoicePreferences.voiceURI !== `pocket:${voiceId}`
+    ) {
+      return
+    }
+    await playPocketTtsAudio(chunks, engine.sampleRate)
+  })
+  pocketTtsQueue = queuedSpeech.catch((error: unknown) => {
+    if (
+      requestId !== pocketTtsSpeechRequest ||
+      alertVoicePreferences.voiceURI !== `pocket:${voiceId}`
+    ) {
+      return
+    }
+    console.error('Pocket TTS alert speech failed.', error)
+    voiceSettingsStatusElement.textContent =
+      `Não foi possível preparar a voz Pocket TTS: ${
+        error instanceof Error ? error.message : String(error)
+      }`
+    speakWithSystemVoice(text)
+  })
 }
 
 function speakPiperLocally(text: string, voiceId: PiperVoiceId): void {
@@ -546,6 +775,11 @@ function speakWithSystemVoice(text: string): void {
 }
 
 function speakLocally(text: string): void {
+  const pocketVoiceId = pocketVoiceFromURI(alertVoicePreferences.voiceURI)
+  if (pocketVoiceId) {
+    speakPocketTtsLocally(text, pocketVoiceId)
+    return
+  }
   const piperVoiceId = piperVoiceFromURI(alertVoicePreferences.voiceURI)
   if (piperVoiceId) {
     speakPiperLocally(text, piperVoiceId)
@@ -564,7 +798,8 @@ function selectedAlertVoice(): SpeechSynthesisVoice | null {
   if (
     !('speechSynthesis' in window) ||
     !alertVoicePreferences.voiceURI ||
-    piperVoiceFromURI(alertVoicePreferences.voiceURI)
+    piperVoiceFromURI(alertVoicePreferences.voiceURI) ||
+    pocketVoiceFromURI(alertVoicePreferences.voiceURI)
   ) {
     return null
   }
@@ -583,14 +818,23 @@ function refreshAlertVoices(): void {
   automaticOption.textContent = 'Automática (Português do sistema)'
   fragment.append(automaticOption)
   const piperGroup = document.createElement('optgroup')
-  piperGroup.label = 'Piper · offline · pt-BR · CC0'
-  for (const [voiceId, voiceName] of Object.entries(piperVoiceLabels)) {
+  piperGroup.label = 'Piper · offline · pt-BR'
+  for (const [profileId, profile] of Object.entries(piperVoiceProfiles)) {
     const option = document.createElement('option')
-    option.value = `piper:${voiceId}`
-    option.textContent = `${voiceName} (Piper, qualidade média)`
+    option.value = `piper:${profileId}`
+    option.textContent = `${profile.label} · Piper pt-BR`
     piperGroup.append(option)
   }
   fragment.append(piperGroup)
+  const pocketGroup = document.createElement('optgroup')
+  pocketGroup.label = 'Pocket TTS · local · pt-BR'
+  for (const [voiceId, label] of Object.entries(pocketVoiceLabels)) {
+    const option = document.createElement('option')
+    option.value = `pocket:${voiceId}`
+    option.textContent = `${label} · Pocket TTS pt-BR`
+    pocketGroup.append(option)
+  }
+  fragment.append(pocketGroup)
   for (const voice of voices) {
     const option = document.createElement('option')
     option.value = voice.voiceURI
@@ -600,6 +844,7 @@ function refreshAlertVoices(): void {
   alertVoiceControl.replaceChildren(fragment)
   if (
     piperVoiceFromURI(selectedUri) ||
+    pocketVoiceFromURI(selectedUri) ||
     (selectedUri && voices.some((voice) => voice.voiceURI === selectedUri))
   ) {
     alertVoiceControl.value = selectedUri
@@ -608,19 +853,26 @@ function refreshAlertVoices(): void {
     alertVoiceControl.value = ''
   }
   const selectedPiperVoice = piperVoiceFromURI(selectedUri)
-  testVoiceControl.disabled = !hasSystemSpeech && !selectedPiperVoice
+  const selectedPocketVoice = pocketVoiceFromURI(selectedUri)
+  const selectedLocalVoice = Boolean(selectedPiperVoice || selectedPocketVoice)
+  testVoiceControl.disabled = !hasSystemSpeech && !selectedLocalVoice
+  alertVoiceRateControl.disabled = selectedLocalVoice
+  alertVoicePitchControl.disabled = selectedLocalVoice
   if (selectedPiperVoice) {
     voiceSettingsStatusElement.textContent =
-      `Piper ${piperVoiceLabels[selectedPiperVoice]} sintetiza localmente. A primeira prévia baixa o modelo (~63 MB); depois, não precisa de internet.`
+      `${piperVoiceLabelFromURI(selectedUri)} sintetiza localmente. O modelo (~63 MB) é baixado na primeira prévia e depois funciona offline.`
+  } else if (selectedPocketVoice) {
+    voiceSettingsStatusElement.textContent =
+      `${pocketVoiceLabels[selectedPocketVoice]} sintetiza em português no dispositivo. O primeiro download do modelo é de cerca de 180 MB; depois, fica em cache local. O texto dos alertas não é enviado a serviços de voz. Use “Testar voz” para preparar o modelo.`
   } else if (!hasSystemSpeech) {
     voiceSettingsStatusElement.textContent =
-      'Vozes do sistema não estão disponíveis; selecione uma voz Piper pt-BR para usar síntese offline.'
+      'Vozes do sistema não estão disponíveis; selecione Faber ou uma voz Pocket TTS para usar síntese pt-BR local.'
   } else if (voices.length === 0) {
     voiceSettingsStatusElement.textContent =
-      'Nenhuma voz do sistema foi listada. As vozes Piper pt-BR continuam disponíveis para uso offline.'
+      'Nenhuma voz do sistema foi listada. Faber e as vozes Pocket TTS continuam disponíveis localmente.'
   } else {
     voiceSettingsStatusElement.textContent =
-      `${voices.length} voz(es) do sistema disponíveis. Piper também oferece três vozes pt-BR que funcionam offline.`
+      `${voices.length} voz(es) do sistema disponíveis. Faber e Jeff usam Piper; Alba e Azelma do Pocket TTS também sintetizam localmente.`
   }
   if (alertVoiceStorageWarning) {
     voiceSettingsStatusElement.textContent += ` ${alertVoiceStorageWarning}`
@@ -651,12 +903,28 @@ function configureAlertVoice(): void {
 configureAlertVoice()
 
 alertVoiceControl.addEventListener('change', () => {
-  const previousVoiceId = piperVoiceFromURI(alertVoicePreferences.voiceURI)
+  const previousVoiceURI = alertVoicePreferences.voiceURI
+  const previousVoiceId = piperVoiceFromURI(previousVoiceURI)
   alertVoicePreferences.voiceURI = alertVoiceControl.value
-  persistAlertVoicePreferences()
   const nextVoiceId = piperVoiceFromURI(alertVoicePreferences.voiceURI)
-  testVoiceControl.disabled = !('speechSynthesis' in window) && !nextVoiceId
-  if (previousVoiceId !== nextVoiceId) stopPiperAudio()
+  const nextPocketVoiceId = pocketVoiceFromURI(alertVoicePreferences.voiceURI)
+  const selectedProfile = piperVoiceProfileFromURI(alertVoicePreferences.voiceURI)
+  if (selectedProfile || nextPocketVoiceId) {
+    alertVoicePreferences.rate = selectedProfile?.rate ?? 1
+    alertVoicePreferences.pitch = selectedProfile?.pitch ?? 1
+    alertVoiceRateControl.value = String(alertVoicePreferences.rate)
+    alertVoicePitchControl.value = String(alertVoicePreferences.pitch)
+    updateAlertVoiceOutputs()
+  }
+  const selectedLocalVoice = Boolean(nextVoiceId || nextPocketVoiceId)
+  alertVoiceRateControl.disabled = selectedLocalVoice
+  alertVoicePitchControl.disabled = selectedLocalVoice
+  persistAlertVoicePreferences()
+  testVoiceControl.disabled = !('speechSynthesis' in window) && !selectedLocalVoice
+  if (previousVoiceURI !== alertVoicePreferences.voiceURI) {
+    stopLocalVoiceAudio()
+    pocketTtsSpeechRequest += 1
+  }
   if (previousVoiceId !== nextVoiceId && voiceEngineWorker) {
     voiceEngineWorker.terminate()
     voiceEngineWorker = null
@@ -665,7 +933,12 @@ alertVoiceControl.addEventListener('change', () => {
   }
   if (nextVoiceId) {
     voiceSettingsStatusElement.textContent =
-      `Piper ${piperVoiceLabels[nextVoiceId]} sintetiza localmente. A primeira prévia baixa o modelo (~63 MB); depois, não precisa de internet.`
+      `${piperVoiceLabelFromURI(alertVoicePreferences.voiceURI)} sintetiza localmente sem alterar o timbre original. O modelo (~63 MB) é baixado na primeira prévia e depois funciona offline.`
+    return
+  }
+  if (nextPocketVoiceId) {
+    voiceSettingsStatusElement.textContent =
+      `${pocketVoiceLabels[nextPocketVoiceId]} sintetiza localmente em português. Use “Testar voz” para baixar cerca de 180 MB na primeira configuração; depois, o modelo fica em cache.`
     return
   }
   const voice = selectedAlertVoice()
@@ -690,10 +963,10 @@ testVoiceControl.addEventListener('click', () => {
   const piperVoiceId = piperVoiceFromURI(alertVoicePreferences.voiceURI)
   if (piperVoiceId) {
     window.speechSynthesis?.cancel()
-    stopPiperAudio()
+    stopLocalVoiceAudio()
     testVoiceControl.disabled = true
     voiceSettingsStatusElement.textContent =
-      `Preparando a voz ${piperVoiceLabels[piperVoiceId]} localmente...`
+      `Preparando a voz ${piperVoiceLabelFromURI(alertVoicePreferences.voiceURI)} localmente...`
     void requestVoiceEngine(piperVoiceId, {
       type: 'prepare',
       allowDownload: true
@@ -706,7 +979,8 @@ testVoiceControl.addEventListener('click', () => {
       )
       .then(async (blob) => {
         if (!blob) throw new Error('O mecanismo local não retornou áudio.')
-        voiceSettingsStatusElement.textContent = `Reproduzindo prévia: ${piperVoiceLabels[piperVoiceId]}.`
+        voiceSettingsStatusElement.textContent =
+          `Reproduzindo prévia: ${piperVoiceLabelFromURI(alertVoicePreferences.voiceURI)}.`
         await playPiperAudio(blob, () => {
           voiceSettingsStatusElement.textContent = 'Prévia concluída.'
         })
@@ -722,6 +996,67 @@ testVoiceControl.addEventListener('click', () => {
       })
     return
   }
+  const pocketVoiceId = pocketVoiceFromURI(alertVoicePreferences.voiceURI)
+  if (pocketVoiceId) {
+    window.speechSynthesis?.cancel()
+    stopLocalVoiceAudio()
+    voiceAudioContext ??= new AudioContext()
+    void voiceAudioContext.resume().catch((error: unknown) => {
+      console.error('Could not resume local voice audio.', error)
+    })
+    const requestId = ++pocketTtsSpeechRequest
+    testVoiceControl.disabled = true
+    voiceSettingsStatusElement.textContent =
+      `Preparando a voz ${pocketVoiceLabels[pocketVoiceId]} localmente...`
+    const previewTask = pocketTtsQueue.then(async () => {
+      if (
+        requestId !== pocketTtsSpeechRequest ||
+        alertVoicePreferences.voiceURI !== `pocket:${pocketVoiceId}`
+      ) {
+        return
+      }
+      const engine = await getPocketTtsEngine(updatePocketTtsProgress)
+      const voice = await getPocketTtsVoice(pocketVoiceId)
+      const chunks: Float32Array[] = []
+      await engine.generate('Prévia de voz. O jungler inimigo foi localizado.', {
+        voice,
+        onChunk: (chunk) => chunks.push(chunk)
+      })
+      if (
+        requestId !== pocketTtsSpeechRequest ||
+        alertVoicePreferences.voiceURI !== `pocket:${pocketVoiceId}`
+      ) {
+        return
+      }
+      voiceSettingsStatusElement.textContent =
+        `Reproduzindo prévia: ${pocketVoiceLabels[pocketVoiceId]}.`
+      await playPocketTtsAudio(chunks, engine.sampleRate, () => {
+        voiceSettingsStatusElement.textContent = 'Prévia concluída.'
+      })
+    })
+    pocketTtsQueue = previewTask.catch((error: unknown) => {
+      if (
+        requestId !== pocketTtsSpeechRequest ||
+        alertVoicePreferences.voiceURI !== `pocket:${pocketVoiceId}`
+      ) {
+        return
+      }
+      console.error('Pocket TTS voice preview failed.', error)
+      voiceSettingsStatusElement.textContent =
+        `Não foi possível preparar a prévia Pocket TTS: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+    })
+    void pocketTtsQueue.finally(() => {
+      if (
+        requestId === pocketTtsSpeechRequest &&
+        alertVoicePreferences.voiceURI === `pocket:${pocketVoiceId}`
+      ) {
+        testVoiceControl.disabled = false
+      }
+    })
+    return
+  }
   if (!('speechSynthesis' in window)) {
     voiceSettingsStatusElement.textContent = 'A síntese de voz não está disponível.'
     return
@@ -731,7 +1066,7 @@ testVoiceControl.addEventListener('click', () => {
       'A voz selecionada não está mais disponível. Escolha outra voz na lista.'
     return
   }
-  stopPiperAudio()
+  stopLocalVoiceAudio()
   window.speechSynthesis.cancel()
   const utterance = createAlertUtterance(
     'Prévia de voz. O jungler inimigo foi localizado.'
@@ -752,7 +1087,11 @@ function announceEvent(titleText: string): void {
   window.companion.publishOverlayAlert(titleText)
   if (diagnosticMode) return
 
-  if ('speechSynthesis' in window || piperVoiceFromURI(alertVoicePreferences.voiceURI)) {
+  if (
+    'speechSynthesis' in window ||
+    piperVoiceFromURI(alertVoicePreferences.voiceURI) ||
+    pocketVoiceFromURI(alertVoicePreferences.voiceURI)
+  ) {
     try {
       speakLocally(titleText)
     } catch (error) {
@@ -772,6 +1111,13 @@ function setOverlayLastSeenMarker(marker: OverlayMarker | null): void {
 
 function setStatus(message: string): void {
   captureStatus.textContent = message
+  captureStatus.dataset.state = stream
+    ? 'active'
+    : message.startsWith('Jogo encontrado.')
+    ? 'ready'
+    : message.startsWith('Captura desligada.')
+      ? 'idle'
+      : 'searching'
 }
 
 function setDiagnosticMode(enabled: boolean): void {
@@ -800,7 +1146,7 @@ diagnosticModeControl.addEventListener('click', () => {
 })
 
 function resetMatchEvents(): void {
-  voidGrubAlertAnnounced = false
+  announcedMatchTimeAlerts = new Set()
   lastRecognizedClock = null
   stableClockCandidate = null
   stableClockSamples = 0
@@ -839,18 +1185,76 @@ function parseGameClock(text: string): number | null {
   return Number(match[1]) * 60 + Number(match[2])
 }
 
+function formatRemainingTime(seconds: number): string {
+  if (seconds === 60) return '1 minuto'
+  if (seconds === 1) return '1 segundo'
+  if (seconds < 60) return `${seconds} segundos`
+  return `${Math.ceil(seconds / 60)} minutos`
+}
+
 function formatVoidGrubReminder(seconds: number): string | null {
   if (seconds < voidGrubAlertTime) return null
   if (seconds >= voidGrubSpawnTime) return 'As Vastilarvas já nasceram.'
 
-  const remainingSeconds = voidGrubSpawnTime - seconds
-  const remainingTime =
-    remainingSeconds === 60
-      ? '1 minuto'
-      : remainingSeconds < 60
-        ? `${remainingSeconds} segundos`
-        : `${Math.ceil(remainingSeconds / 60)} minutos`
-  return `As Vastilarvas nascem em ${remainingTime}.`
+  return `As Vastilarvas nascem em ${formatRemainingTime(voidGrubSpawnTime - seconds)}.`
+}
+
+function formatObjectiveCountdown(
+  objective: 'Arauto' | 'Barão',
+  spawnTime: number,
+  seconds: number
+): string {
+  return `O ${objective} nasce em ${formatRemainingTime(spawnTime - seconds)}.`
+}
+
+function isWithinAlertWindow(seconds: number, triggerTime: number): boolean {
+  return seconds >= triggerTime && seconds <= triggerTime + 30
+}
+
+function announceMatchTimeAlert(id: string, message: string): void {
+  if (announcedMatchTimeAlerts.has(id)) return
+  announceEvent(message)
+  announcedMatchTimeAlerts.add(id)
+}
+
+function processMatchTimeAlerts(seconds: number): void {
+  if (seconds >= voidGrubAlertTime) {
+    const reminder = formatVoidGrubReminder(seconds)
+    if (reminder !== null) announceMatchTimeAlert('void-grubs', reminder)
+  }
+
+  if (isWithinAlertWindow(seconds, estimatedFullClearTime)) {
+    announceMatchTimeAlert(
+      'estimated-full-clear',
+      'Pelo tempo estimado, o jungler pode ter feito o full clear e estar procurando uma oportunidade de gank.'
+    )
+  }
+  if (isWithinAlertWindow(seconds, estimatedCrabTime)) {
+    announceMatchTimeAlert(
+      'estimated-crab',
+      'O jungler pode estar no Aronguejo agora; fique atento a um possível gank.'
+    )
+  }
+
+  if (seconds >= heraldReminderTime && seconds < heraldSpawnTime) {
+    announceMatchTimeAlert(
+      'herald-reminder',
+      formatObjectiveCountdown('Arauto', heraldSpawnTime, seconds)
+    )
+  }
+  if (isWithinAlertWindow(seconds, heraldSpawnTime)) {
+    announceMatchTimeAlert('herald-spawn', 'O Arauto nasceu.')
+  }
+
+  if (seconds >= baronReminderTime && seconds < baronSpawnTime) {
+    announceMatchTimeAlert(
+      'baron-reminder',
+      formatObjectiveCountdown('Barão', baronSpawnTime, seconds)
+    )
+  }
+  if (isWithinAlertWindow(seconds, baronSpawnTime)) {
+    announceMatchTimeAlert('baron-spawn', 'O Barão nasceu.')
+  }
 }
 
 function drawCircularCrop(
@@ -1603,13 +2007,7 @@ async function readGameClock(): Promise<void> {
     lastClockSampleAt = now
     if (stableClockSamples < 2) return
 
-    if (!voidGrubAlertAnnounced) {
-      const reminder = formatVoidGrubReminder(seconds)
-      if (reminder !== null) {
-        announceEvent(reminder)
-        voidGrubAlertAnnounced = true
-      }
-    }
+    processMatchTimeAlerts(seconds)
   } catch (error) {
     console.error('Could not read the League of Legends game clock.', error)
     setStatus('A detecção está ativa, mas não foi possível ler o relógio da partida.')
@@ -1766,15 +2164,6 @@ function calibrationPointFromEvent(event: PointerEvent): Point | null {
   }
 }
 
-calibrateMinimapControl.addEventListener('click', () => {
-  calibrationDialog.showModal()
-  calibrationSizeControl.min = '0.05'
-  calibrationSizeControl.max = '0.3'
-  calibrationSizeControl.step = '0.005'
-  calibrationSizeControl.value = String(minimapCrop.size)
-  drawCalibrationPreview()
-})
-
 calibrationSizeControl.addEventListener('input', () => {
   minimapCrop.size = Number(calibrationSizeControl.value)
   saveMinimapCrop()
@@ -1890,7 +2279,6 @@ async function discoverGameWindow(): Promise<void> {
   if (discoveryInProgress || selectedWindowId || stream) return
   discoveryInProgress = true
   startCaptureButton.disabled = true
-  setStatus('Procurando uma janela aberta do League of Legends...')
 
   try {
     const windows = await window.companion.findLeagueWindows()
@@ -1915,7 +2303,7 @@ async function discoverGameWindow(): Promise<void> {
       setStatus(
         windows.length > 1
           ? `Encontrei ${windows.length} janelas correspondentes; selecionei a primeira. Pressione Start para iniciar.`
-          : 'Jogo encontrado. Pressione Start para iniciar os alertas.'
+          : 'Jogo encontrado! Pressione Iniciar para ativar o tracker.'
       )
     }
   } catch (error) {

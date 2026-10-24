@@ -1,18 +1,13 @@
 import { PATH_MAP, TtsSession } from '@mintplex-labs/piper-tts-web'
 import piperDataUrl from '@diffusionstudio/piper-wasm/build/piper_phonemize.data?url'
 import piperWasmUrl from '@diffusionstudio/piper-wasm/build/piper_phonemize.wasm?url'
-import onnxWasmUrl from '../../../node_modules/onnxruntime-web/dist/ort-wasm-simd.wasm?url'
+import onnxWasmUrl from 'onnxruntime-web/ort-wasm-simd-threaded.wasm?url'
 
 const voices = {
   'pt_BR-faber-medium': {
     directory: 'faber',
     size: 63_201_294,
     sha256: '858555e3a064209c57088fe6bd70c4c3dc54d03eaa00c45d5ecaf43a33f95aa7'
-  },
-  'pt_BR-cadu-medium': {
-    directory: 'cadu',
-    size: 62_950_044,
-    sha256: '765f0809a6ea9035d4a6d0d008dbf8876e68b2dd32029312672fa8f405bdb535'
   },
   'pt_BR-jeff-medium': {
     directory: 'jeff',

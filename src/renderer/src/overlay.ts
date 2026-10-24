@@ -16,6 +16,10 @@ function hideLastSeenMarker(): void {
 
 window.companion.onOverlayAlert((title) => {
   alertElement.textContent = title
+  alertElement.classList.toggle(
+    'is-disappearance',
+    title.startsWith('Jungler desapareceu da visão.')
+  )
   alertElement.classList.add('is-visible')
 
   if (hideTimer !== null) window.clearTimeout(hideTimer)

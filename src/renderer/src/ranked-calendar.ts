@@ -409,7 +409,6 @@ export function initializeRankedCalendar(): void {
   const matchPage = requireElement<HTMLElement>('#match-page')
   const calendarPage = requireElement<HTMLElement>('#calendar-page')
   const voicePage = requireElement<HTMLElement>('#voice-page')
-  const voiceSettingsButton = requireElement<HTMLButtonElement>('#voice-settings-button')
   const navigation = requireElement<HTMLElement>('.sidebar-navigation')
   const status = requireElement<HTMLElement>('#calendar-status')
   const previousMonth = requireElement<HTMLButtonElement>('#calendar-previous-month')
@@ -1249,7 +1248,7 @@ export function initializeRankedCalendar(): void {
     calendarPage.hidden = !showCalendar
     voicePage.hidden = selectedPage !== 'voice'
     pageTitle.textContent = showHome
-      ? 'Bem-vindo ao Bronx I.A.'
+      ? 'Bem-vindo ao Bronx I.A'
       : showCalendar
         ? 'Perfil'
         : selectedPage === 'voice'
@@ -1266,8 +1265,6 @@ export function initializeRankedCalendar(): void {
       if (button.dataset.pageTarget === selectedPage) button.setAttribute('aria-current', 'page')
       else button.removeAttribute('aria-current')
     }
-    if (selectedPage === 'voice') voiceSettingsButton.setAttribute('aria-current', 'page')
-    else voiceSettingsButton.removeAttribute('aria-current')
     if (showCalendar) render()
   }
 
@@ -1277,8 +1274,6 @@ export function initializeRankedCalendar(): void {
     const pageButton = target.closest<HTMLButtonElement>('[data-page-target]')
     if (pageButton) navigateToPage(pageButton.dataset.pageTarget)
   })
-
-  voiceSettingsButton.addEventListener('click', () => navigateToPage('voice'))
 
   homePage.addEventListener('click', (event) => {
     const target = event.target

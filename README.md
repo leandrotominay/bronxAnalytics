@@ -1,6 +1,6 @@
 <div align="center">
-  <img src="src/renderer/assets/bronx-jhin.png" alt="Arte do Bronx I.A." width="720" />
-  <h1>Bronx I.A.</h1>
+  <img src="src/renderer/assets/bronx-jhin.png" alt="Arte do Bronx I.A" width="720" />
+  <h1>Bronx I.A</h1>
   <p><strong>O companion de League of Legends focado no jungler.</strong></p>
   <p>Posição observada no minimapa, contexto de objetivos e histórico ranqueado em uma interface desktop.</p>
   <p><code>CARVÃO</code> · <code>COBRE</code> · <code>ÂMBAR</code></p>
@@ -10,7 +10,7 @@
 
 ## Acompanhe o que importa
 
-O Bronx I.A. combina dados locais da partida com leitura visual do
+O Bronx I.A combina dados locais da partida com leitura visual do
 minimapa para destacar o jungler adversário. A proposta é manter a tela
 centrada no que acontece na selva: sem alertas de desaparecimento de top,
 mid ou bot. Quando o jungler deixa de ser detectado, o overlay marca com `?`
@@ -24,9 +24,24 @@ a IA de detecção de jungler ainda em desenvolvimento.
 | **Posição observada** | Mostra as regiões, acampamentos e covis de objetivo onde o ícone do jungler é confirmado em leituras consecutivas, mesmo quando ele está se movendo. |
 | **Última posição observada** | Após duas leituras consecutivas sem detectar o jungler, exibe um `?` no ponto em que ele foi visto pela última vez e avisa na tela e por voz. O marcador é removido quando ele volta a ser detectado. |
 | **Contexto de gank** | Ao detectar o jungler numa rota, sinaliza uma possibilidade — nunca afirma que um gank vai acontecer. |
-| **Objetivos** | Informa a aproximação do surgimento das Vastilarvas e destaca quando o jungler é observado perto de um covil. |
+| **Objetivos** | Usa o cronômetro para alertar sobre Vastilarvas, Arauto (14:30/15:00) e Barão (19:00/20:00), além de estimar full clear (02:40) e Aronguejo (03:15) quando não há benchmark recente e confiável para o campeão. São previsões, não confirmações de conclusão de acampamentos ou surgimento real do objetivo. |
 | **Calendário ranqueado** | Importa partidas solo ranqueadas automaticamente e reúne resultados e snapshots de elo/PDL. |
-| **Voz local** | Piper em português brasileiro ou vozes instaladas no Windows; se o modelo Piper ainda não estiver instalado, os alertas usam uma voz pt-BR disponível no sistema. Os alertas não são enviados a serviços de voz. |
+| **Voz local** | Faber e Jeff originais do Piper pt-BR, Alba e Azelma do Pocket TTS em português ou vozes instaladas no Windows. Os modelos são baixados na primeira prévia e depois ficam em cache local. A síntese e o texto dos alertas permanecem no dispositivo. |
+
+### Vozes Pocket TTS
+
+As vozes Alba e Azelma usam o pacote
+[pocket-tts-js](https://github.com/vlapky/pocket-tts-js) (MIT) e o bundle ONNX em português de
+[vlapky/pocket-tts-onnx](https://huggingface.co/vlapky/pocket-tts-onnx), cuja
+licença publicada é CC BY 4.0. Os créditos e atribuições aplicáveis às vozes
+devem acompanhar os respectivos dados e a licença do bundle; consulte também
+o projeto original [Kyutai Pocket TTS](https://github.com/kyutai-labs/pocket-tts).
+
+A primeira prévia pode baixar cerca de 180 MB de modelos e dados de voz do
+Hugging Face. Esses são arquivos públicos gratuitos; não há serviço pago de
+síntese. O runtime ONNX Web acompanha o aplicativo e o texto dos alertas é
+processado localmente. Os arquivos de voz ficam no cache local do aplicativo
+para uso posterior offline. A conexão é necessária na primeira configuração.
 
 > **Em desenvolvimento:** a leitura do minimapa usa o retrato do campeão e
 > regiões geométricas aproximadas. Escala, qualidade de imagem e ícones
@@ -125,7 +140,7 @@ uma fonte de assets autorizada pela Riot.
 - Diagnósticos e ajustes do minimapa ficam disponíveis no modo desenvolvedor.
 
 O uso da API local e a distribuição do produto estão sujeitos às políticas
-atuais da Riot Games. Bronx I.A. não é endossado pela Riot Games e não
+atuais da Riot Games. Bronx I.A não é endossado pela Riot Games e não
 reflete as opiniões da Riot Games nem de qualquer pessoa oficialmente
 envolvida na produção ou gestão de propriedades da Riot Games. Riot Games e
 todas as propriedades associadas são marcas comerciais ou marcas registradas

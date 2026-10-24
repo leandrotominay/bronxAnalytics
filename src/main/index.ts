@@ -28,7 +28,7 @@ declare const __BRONX_RIOT_SYNC_URL__: string
 
 const currentDirectory = fileURLToPath(new URL('.', import.meta.url))
 const require = createRequire(import.meta.url)
-app.setName('Bronx I.A.')
+app.setName('Bronx I.A')
 const englishDataDirectory = join(
   dirname(require.resolve('@tesseract.js-data/eng')),
   '4.0.0'
@@ -103,7 +103,7 @@ function isRiotSyncRequest(value: unknown): value is RiotSyncRequest {
 function validateRiotWorkerUrl(value: unknown): URL {
   if (typeof value !== 'string' || value.length === 0) {
     throw new Error(
-      'A sincronização não está configurada nesta versão do Bronx I.A.'
+      'A sincronização não está configurada nesta versão do Bronx I.A'
     )
   }
   if (value.length > 240) {
@@ -221,7 +221,7 @@ function createWindow(): void {
     minHeight: 620,
     frame: false,
     autoHideMenuBar: true,
-    title: 'Bronx I.A.',
+    title: 'Bronx I.A',
     icon: bronxAnalyticsIcon,
     backgroundColor: '#0d0d10',
     webPreferences: {

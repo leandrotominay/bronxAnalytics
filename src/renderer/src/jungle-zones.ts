@@ -115,11 +115,14 @@ export function formatJungleZone(
       ? 'aliado'
       : 'inimigo'
   if (area === 'camp') {
+    if (location === 'wolves' && teamLabel === 'aliado') {
+      return 'Jungler no T2 do mid.'
+    }
     const campNames: Record<JungleCamp, string> = {
       'blue-buff': 'Blue',
       'red-buff': 'Red',
-      wolves: 'Lobos',
-      raptors: 'Acúleos',
+      wolves: 'Dragão',
+      raptors: 'Midlane',
       gromp: 'Grompe',
       krugs: 'Krugues'
     }
