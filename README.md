@@ -3,7 +3,6 @@
   <h1>Bronx I.A</h1>
   <p><strong>O companion de League of Legends focado no jungler.</strong></p>
   <p>Posição observada no minimapa, contexto de objetivos e histórico ranqueado em uma interface desktop.</p>
-  <p><code>CARVÃO</code> · <code>COBRE</code> · <code>ÂMBAR</code></p>
 </div>
 
 ---
@@ -68,6 +67,19 @@ npm run typecheck
 npm run build
 ```
 
+Para criar o instalador Windows `.exe`, configure primeiro a URL HTTPS do
+Worker conforme a seção de sincronização e execute:
+
+```powershell
+npm run dist:win
+```
+
+O instalador NSIS, com a tela de boas-vindas e a identidade visual do Bronx I.A,
+será gerado em `release/`. Ele instala o mesmo app Electron usado em
+desenvolvimento; o formato do instalador não reduz o uso de CPU ou memória
+durante a partida. Node.js não é necessário no computador de quem instalar o
+app. O Worker Cloudflare continua sendo um serviço separado.
+
 Abra o League of Legends e entre em uma partida. O app procura a janela do
 jogo; pressione **Iniciar** para autorizar a captura visível. A captura
 e a análise do minimapa acontecem localmente, e a captura termina pelo botão
@@ -104,11 +116,11 @@ O app não inclui uma chave Riot. Para habilitar sincronização:
    Cloudflare, configure `RIOT_API_KEY` como secret e publique com
    `npm run worker:deploy`.
 4. Ao criar uma versão distribuível, defina `BRONX_RIOT_SYNC_URL` como a URL
-   HTTPS do Worker antes de executar `npm run build`. No PowerShell:
+   HTTPS do Worker antes de executar `npm run dist:win`. No PowerShell:
 
    ```powershell
    $env:BRONX_RIOT_SYNC_URL = 'https://seu-worker.workers.dev'
-   npm run build
+   npm run dist:win
    ```
 
    O endereço fica configurado na versão do app, não é solicitado aos jogadores

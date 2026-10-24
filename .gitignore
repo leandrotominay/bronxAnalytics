@@ -1,6 +1,7 @@
 node_modules/
 out/
 dist/
+release/
 coverage/
 npm-debug.log*
 *.tsbuildinfo

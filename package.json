@@ -8,6 +8,7 @@
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
+    "dist:win": "npm run build && electron-builder --win nsis",
     "preview": "electron-vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json && npm run worker:typecheck",
     "worker:dev": "wrangler dev --config workers/riot-sync/wrangler.jsonc",
@@ -17,6 +18,7 @@
   "devDependencies": {
     "@types/node": "^22.15.30",
     "electron": "^45.0.0",
+    "electron-builder": "^26.18.0",
     "electron-vite": "^4.0.0",
     "typescript": "^5.8.3",
     "vite": "^6.3.5",
@@ -29,5 +31,34 @@
     "onnxruntime-web": "^1.30.0",
     "pocket-tts-js": "^0.1.0",
     "tesseract.js": "^7.0.0"
+  },
+  "build": {
+    "appId": "com.bronx.analytics",
+    "productName": "Bronx I.A",
+    "directories": {
+      "buildResources": "resources",
+      "output": "release"
+    },
+    "files": [
+      "out/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "resources/bronx-analytics.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowElevation": true,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "installerLanguages": [
+        "pt_BR"
+      ],
+      "installerSidebar": "resources/installer-sidebar.bmp",
+      "include": "build/installer.nsh"
+    }
   }
 }
