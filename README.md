@@ -51,34 +51,121 @@ para uso posterior offline. A conexão é necessária na primeira configuração
 Os itens **Wireless Champion Select** e **Sugestão de Pick** na navegação são
 apenas espaços reservados para futuras funcionalidades e permanecem desativados.
 
-## Começar
+## Instalação e execução no Windows
 
-Requer Windows, Node.js e npm. Na pasta do projeto:
+Este guia é para executar o projeto a partir do código-fonte. Você precisa de
+Windows, Git, Node.js 22.12 ou superior (recomendado: Node.js LTS), npm e
+internet durante a instalação. O Worker da Riot é opcional; só é necessário
+para habilitar a sincronização do calendário.
+
+### Primeira instalação
+
+1. Instale o Git e o Node.js LTS. Feche e abra novamente o PowerShell depois
+   da instalação do Node.js.
+2. Clone o repositório e entre na pasta do projeto:
+
+   ```powershell
+   git clone https://github.com/leandrotominay/bronxAnalytics.git
+   cd .\bronxAnalytics
+   ```
+
+3. Confirme que o PowerShell encontra Node.js e npm:
+
+   ```powershell
+   node --version
+   npm --version
+   ```
+
+   O Node.js deve ser `v22.12.0` ou superior. Se `node` ou `npm` não forem
+   reconhecidos, instale o Node.js LTS e abra um novo PowerShell.
+
+4. Instale os pacotes do projeto:
+
+   ```powershell
+   npm install
+   ```
+
+5. Baixe o runtime do Electron, necessário para abrir o aplicativo:
+
+   ```powershell
+   npx install-electron --no
+   ```
+
+   Aguarde o comando terminar. Confirme que o executável foi instalado:
+
+   ```powershell
+   Test-Path .\node_modules\electron\dist\electron.exe
+   ```
+
+   Prossiga somente se o resultado for `True`. Se for `False`, o runtime não
+   foi baixado: repita `npx install-electron --no` e confira o erro exibido.
+   O download pode ser bloqueado por falta de internet, proxy ou firewall.
+
+6. Inicie o aplicativo:
+
+   ```powershell
+   npm run dev
+   ```
+
+   A janela do Bronx I.A deve abrir. Mantenha essa janela do PowerShell aberta
+   enquanto usa o app; `Ctrl+C` encerra o processo de desenvolvimento.
+
+### Executar novamente depois da instalação
+
+Abra o PowerShell, entre na pasta clonada do projeto e execute:
 
 ```powershell
-npm install
+cd .\bronxAnalytics
 npm run dev
 ```
 
-Para verificar tipos e gerar a versão de produção:
+Não é necessário repetir `npm install` nem baixar o runtime do Electron a cada
+execução. Se trocar de computador ou apagar `node_modules`, repita os passos 4
+e 5 da primeira instalação.
+
+### Problemas comuns ao iniciar
+
+- **`Error: Electron uninstall`:** o runtime não está instalado. Na pasta do
+  projeto, execute `npx install-electron --no` e confirme que
+  `Test-Path .\node_modules\electron\dist\electron.exe` retorna `True` antes
+  de tentar `npm run dev` novamente.
+- **O download falha ou o executável continua ausente:** confira a conexão,
+  proxy ou firewall e leia a mensagem completa de `npx install-electron --no`.
+  O aviso `allow-scripts` do npm é separado: `npm approve-scripts
+  --allow-scripts-pending` apenas lista scripts pendentes; não instala o
+  runtime do Electron.
+- **`node` ou `npm` não são reconhecidos:** instale Node.js LTS e reinicie o
+  PowerShell para atualizar o `PATH`.
+
+Para verificar os tipos e compilar sem abrir o app:
 
 ```powershell
 npm run typecheck
 npm run build
 ```
 
-Para criar o instalador Windows `.exe`, configure primeiro a URL HTTPS do
-Worker conforme a seção de sincronização e execute:
+Esses comandos não substituem os passos 5 e 6: uma compilação bem-sucedida não
+confirma que o runtime do Electron foi baixado nem que o app abriu.
+
+Quem só quer usar o aplicativo, sem executar o código-fonte, precisa do
+instalador `.exe`; veja [Gerar o instalador](#gerar-o-instalador-windows).
+Não é necessário instalar Node.js, npm ou Git no computador de quem instala
+esse `.exe`.
+
+### Gerar o instalador Windows
+
+Para criar o instalador `.exe`, na pasta do projeto execute:
 
 ```powershell
 npm run dist:win
 ```
 
-O instalador NSIS, com a tela de boas-vindas e a identidade visual do Bronx I.A,
-será gerado em `release/`. Ele instala o mesmo app Electron usado em
-desenvolvimento; o formato do instalador não reduz o uso de CPU ou memória
-durante a partida. Node.js não é necessário no computador de quem instalar o
-app. O Worker Cloudflare continua sendo um serviço separado.
+O instalador NSIS será gerado em `release/`. Ele instala o mesmo app Electron
+usado em desenvolvimento; o formato do instalador não reduz o uso de CPU ou
+memória durante a partida. O Worker Cloudflare continua sendo um serviço
+separado. A URL do Worker só precisa ser configurada antes da compilação se
+você quiser habilitar a sincronização do calendário; veja a seção
+[Calendário e Riot ID](#calendário-e-riot-id).
 
 Abra o League of Legends e entre em uma partida. O app procura a janela do
 jogo; pressione **Iniciar** para autorizar a captura visível. A captura
