@@ -23,6 +23,7 @@ import {
 } from '../shared/riot-sync'
 import type { OverlayMarker } from '../shared/overlay'
 import { readLiveClientJungler } from './live-client-data'
+import { readChampionFullClear } from './full-clear'
 
 declare const __BRONX_RIOT_SYNC_URL__: string
 
@@ -425,6 +426,18 @@ app.whenReady().then(() => {
   ipcMain.handle('live-client:read-jungler', (event) => {
     assertMainWindowSender(event.sender)
     return readLiveClientJungler()
+  })
+
+  ipcMain.handle('full-clear:read-benchmark', (event, championName: unknown) => {
+    assertMainWindowSender(event.sender)
+    if (
+      typeof championName !== 'string' ||
+      championName.trim().length === 0 ||
+      championName.length > 80
+    ) {
+      throw new Error('O nome do campeão para consultar o full clear é inválido.')
+    }
+    return readChampionFullClear(championName.trim())
   })
 
   ipcMain.handle(

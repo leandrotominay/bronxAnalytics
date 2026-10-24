@@ -5,6 +5,7 @@ import { PocketTTS, type ProgressInfo } from 'pocket-tts-js'
 import ortRuntimeUrl from '../../../node_modules/onnxruntime-web/dist/ort.min.mjs?url'
 import ortWasmModuleUrl from '../../../node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.mjs?url'
 import type { LiveClientJunglerResult } from '../../shared/live-client-data'
+import type { ChampionFullClear } from '../../shared/full-clear'
 import type { OverlayMarker } from '../../shared/overlay'
 import type { RiotSyncRequest, RiotSyncResponse } from '../../shared/riot-sync'
 import {
@@ -33,6 +34,7 @@ declare global {
       findLeagueWindows: () => Promise<Array<{ id: string; name: string }>>
       selectLeagueWindow: (sourceId: string) => Promise<boolean>
       readLiveClientJungler: () => Promise<LiveClientJunglerResult>
+      readChampionFullClear: (championName: string) => Promise<ChampionFullClear | null>
       syncRiotRankedMatches: (request: RiotSyncRequest) => Promise<RiotSyncResponse>
       initializeGameOcr: () => Promise<boolean>
       readGameClock: (image: Uint8Array) => Promise<{ text: string; confidence: number }>
@@ -58,6 +60,8 @@ const junglerCard = document.querySelector<HTMLElement>('#jungler-card')
 const junglerPortraitImage = document.querySelector<HTMLImageElement>('#jungler-portrait')
 const junglerLocationText = document.querySelector<HTMLElement>('#jungler-location')
 const junglerStatus = document.querySelector<HTMLElement>('#jungler-status')
+const fullClearTime = document.querySelector<HTMLElement>('#full-clear-time')
+const fullClearStatus = document.querySelector<HTMLElement>('#full-clear-status')
 const minimapCalibrationDialog = document.querySelector<HTMLDialogElement>(
   '#minimap-calibration'
 )
@@ -101,6 +105,8 @@ if (
   !junglerPortraitImage ||
   !junglerLocationText ||
   !junglerStatus ||
+  !fullClearTime ||
+  !fullClearStatus ||
   !minimapCalibrationDialog ||
   !calibrationPreview ||
   !calibrationSizeInput ||
@@ -134,6 +140,8 @@ const jungleCard = junglerCard
 const junglePortrait = junglerPortraitImage
 const jungleLocation = junglerLocationText
 const junglerStatusElement = junglerStatus
+const fullClearTimeElement = fullClearTime
+const fullClearStatusElement = fullClearStatus
 const calibrationCanvas = calibrationPreview
 const calibrationDialog = minimapCalibrationDialog
 const calibrationSizeControl = calibrationSizeInput
@@ -298,8 +306,6 @@ const jungleZoneAnnouncementCooldownMs = 5_000
 const liveClientPollInterval = 1000
 const voidGrubAlertTime = 7 * 60
 const voidGrubSpawnTime = 8 * 60
-const estimatedFullClearTime = 2 * 60 + 40
-const estimatedCrabTime = 3 * 60 + 15
 const heraldReminderTime = 14 * 60 + 30
 const heraldSpawnTime = 15 * 60
 const baronReminderTime = 19 * 60
@@ -352,6 +358,9 @@ let lastConfirmedJungleMarker: OverlayMarker | null = null
 let jungleDisappearanceAnnounced = false
 let jungleMissedScans = 0
 let trackedJungler: JunglerTarget | null = null
+let fullClearBenchmark: ChampionFullClear | null = null
+let fullClearLookupChampionId: string | null = null
+let fullClearLookupToken = 0
 let trackedJunglerIsDead = false
 let jungleCaptureAnnounced = false
 let isDraggingMinimapCrop = false
@@ -1170,6 +1179,11 @@ function resetMatchEvents(): void {
   jungleCaptureAnnounced = false
   trackedJungler = null
   trackedJunglerIsDead = false
+  fullClearBenchmark = null
+  fullClearLookupChampionId = null
+  fullClearLookupToken += 1
+  fullClearTimeElement.textContent = 'Aguardando jungler'
+  fullClearStatusElement.textContent = 'O tempo será consultado na planilha da partida.'
   junglerStatusElement.textContent = 'Aguardando identificar o jungler adversário.'
   jungleCard.hidden = false
   junglePortrait.removeAttribute('src')
@@ -1223,19 +1237,15 @@ function processMatchTimeAlerts(seconds: number): void {
     if (reminder !== null) announceMatchTimeAlert('void-grubs', reminder)
   }
 
-  if (isWithinAlertWindow(seconds, estimatedFullClearTime)) {
+  if (
+    fullClearBenchmark &&
+    isWithinAlertWindow(seconds, fullClearBenchmark.timeSeconds)
+  ) {
     announceMatchTimeAlert(
-      'estimated-full-clear',
-      'Pelo tempo estimado, o jungler pode ter feito o full clear e estar procurando uma oportunidade de gank.'
+      `estimated-full-clear-${fullClearBenchmark.championName}`,
+      `O jungler inimigo ${fullClearBenchmark.championName} pode concluir o full clear agora e buscar um gank. O melhor tempo registrado na patch ${fullClearBenchmark.patch} é ${formatGameTime(fullClearBenchmark.timeSeconds)}.`
     )
   }
-  if (isWithinAlertWindow(seconds, estimatedCrabTime)) {
-    announceMatchTimeAlert(
-      'estimated-crab',
-      'O jungler pode estar no Aronguejo agora; fique atento a um possível gank.'
-    )
-  }
-
   if (seconds >= heraldReminderTime && seconds < heraldSpawnTime) {
     announceMatchTimeAlert(
       'herald-reminder',
@@ -1254,6 +1264,46 @@ function processMatchTimeAlerts(seconds: number): void {
   }
   if (isWithinAlertWindow(seconds, baronSpawnTime)) {
     announceMatchTimeAlert('baron-spawn', 'O Barão nasceu.')
+  }
+}
+
+function formatGameTime(seconds: number): string {
+  const minutes = Math.floor(seconds / 60)
+  const remainingSeconds = seconds % 60
+  return `${String(minutes).padStart(2, '0')}:${String(remainingSeconds).padStart(2, '0')}`
+}
+
+async function refreshFullClearBenchmark(champion: ChampionDefinition): Promise<void> {
+  if (fullClearLookupChampionId === champion.id) return
+  fullClearLookupChampionId = champion.id
+  fullClearBenchmark = null
+  const lookupToken = ++fullClearLookupToken
+  fullClearTimeElement.textContent = 'Consultando...'
+  fullClearStatusElement.textContent =
+    `Buscando o melhor tempo de ${champion.name} na patch mais recente.`
+  try {
+    const benchmark = await window.companion.readChampionFullClear(champion.name)
+    if (
+      lookupToken !== fullClearLookupToken ||
+      trackedJungler?.championId !== champion.id
+    ) return
+    fullClearBenchmark = benchmark
+    if (benchmark) {
+      fullClearTimeElement.textContent = formatGameTime(benchmark.timeSeconds)
+      fullClearStatusElement.textContent =
+        `Melhor tempo registrado na patch ${benchmark.patch} · ${benchmark.championName}.`
+      if (lastRecognizedClock !== null) processMatchTimeAlerts(lastRecognizedClock)
+    } else {
+      fullClearTimeElement.textContent = 'Sem registro'
+      fullClearStatusElement.textContent =
+        `A planilha ainda não tem um tempo válido para ${champion.name}.`
+    }
+  } catch (error) {
+    console.error(`Could not load the full-clear benchmark for ${champion.name}.`, error)
+    if (lookupToken !== fullClearLookupToken) return
+    fullClearTimeElement.textContent = 'Indisponível'
+    fullClearStatusElement.textContent =
+      'Não foi possível consultar a planilha. O alerta de full clear ficará desativado.'
   }
 }
 
@@ -1320,6 +1370,7 @@ async function applyLiveClientJungler(result: LiveClientJunglerResult): Promise<
     return
   }
   if (!(await assignJunglerChampion(champion.id))) return
+  void refreshFullClearBenchmark(champion)
   trackedJunglerIsDead = result.jungler.isDead
   if (trackedJunglerIsDead) {
     pendingJungleZone = null
@@ -1455,6 +1506,11 @@ function resetJunglerTracking(): void {
 
 function clearTrackedJungler(): void {
   trackedJungler = null
+  fullClearLookupToken += 1
+  fullClearLookupChampionId = null
+  fullClearBenchmark = null
+  fullClearTimeElement.textContent = 'Aguardando jungler'
+  fullClearStatusElement.textContent = 'O tempo será consultado na planilha da partida.'
   trackedJunglerIsDead = false
   junglePortraitTemplate = null
   junglePortrait.hidden = true

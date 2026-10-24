@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type { LiveClientJunglerResult } from '../shared/live-client-data'
+import type { ChampionFullClear } from '../shared/full-clear'
 import type { OverlayMarker } from '../shared/overlay'
 import type { RiotSyncRequest, RiotSyncResponse } from '../shared/riot-sync'
 
@@ -38,6 +39,8 @@ contextBridge.exposeInMainWorld('companion', {
     ipcRenderer.invoke('capture:select-league-window', sourceId),
   readLiveClientJungler: (): Promise<LiveClientJunglerResult> =>
     ipcRenderer.invoke('live-client:read-jungler'),
+  readChampionFullClear: (championName: string): Promise<ChampionFullClear | null> =>
+    ipcRenderer.invoke('full-clear:read-benchmark', championName),
   syncRiotRankedMatches: (request: RiotSyncRequest): Promise<RiotSyncResponse> =>
     ipcRenderer.invoke('riot:sync-ranked-matches', request),
   initializeGameOcr: (): Promise<boolean> =>

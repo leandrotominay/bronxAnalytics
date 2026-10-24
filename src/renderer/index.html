@@ -257,7 +257,7 @@
         <section class="match-toolbar" aria-label="Controles da partida">
           <div>
             <span class="eyebrow">SESSÃO ATUAL</span>
-            <p>Rastreamento visual do jungler e previsões de full clear, Aronguejo e objetivos pelo tempo da partida.</p>
+            <p>Rastreamento visual do jungler e previsões de full clear e objetivos pelo tempo da partida.</p>
           </div>
           <div class="controls">
             <button id="start-button" class="primary-button" type="button" disabled>
@@ -302,11 +302,9 @@
           </div>
           <div class="timeline-alerts-grid">
             <article class="timeline-alert-item">
-              <span class="timeline-alert-time">02:40</span>
-              <strong>Full clear estimado</strong>
-              <p>O jungler pode ter concluído a selva e estar procurando uma oportunidade de gank.</p>
-              <span class="timeline-alert-time timeline-alert-time-secondary">03:15 · Aronguejo</span>
-              <p>O jungler pode estar no rio; fique atento a uma possível tentativa de gank.</p>
+              <span class="timeline-alert-time" id="full-clear-time">Aguardando jungler</span>
+              <strong>Full clear por campeão</strong>
+              <p id="full-clear-status">O tempo será consultado na planilha da partida.</p>
             </article>
             <article class="timeline-alert-item">
               <span class="timeline-alert-time">14:30 <i>·</i> 15:00</span>
@@ -319,7 +317,7 @@
               <p>Aviso 1 minuto antes e outro no horário previsto de surgimento.</p>
             </article>
           </div>
-          <p class="timeline-alerts-note">Previsões baseadas no cronômetro, não confirmações. Sem um benchmark atual e confiável por campeão, usamos o padrão conservador de 02:40 para full clear e 03:15 para Aronguejo.</p>
+          <p class="timeline-alerts-note">O aviso de full clear usa o melhor tempo encontrado para o jungler inimigo na patch mais recente da planilha. São previsões baseadas no cronômetro, não confirmações de conclusão de acampamentos.</p>
         </section>
 
         <section id="developer-tools" class="developer-tools" hidden>

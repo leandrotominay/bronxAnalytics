@@ -24,7 +24,7 @@ a IA de detecção de jungler ainda em desenvolvimento.
 | **Posição observada** | Mostra as regiões, acampamentos e covis de objetivo onde o ícone do jungler é confirmado em leituras consecutivas, mesmo quando ele está se movendo. |
 | **Última posição observada** | Após duas leituras consecutivas sem detectar o jungler, exibe um `?` no ponto em que ele foi visto pela última vez e avisa na tela e por voz. O marcador é removido quando ele volta a ser detectado. |
 | **Contexto de gank** | Ao detectar o jungler numa rota, sinaliza uma possibilidade — nunca afirma que um gank vai acontecer. |
-| **Objetivos** | Usa o cronômetro para alertar sobre Vastilarvas, Arauto (14:30/15:00) e Barão (19:00/20:00), além de estimar full clear (02:40) e Aronguejo (03:15) quando não há benchmark recente e confiável para o campeão. São previsões, não confirmações de conclusão de acampamentos ou surgimento real do objetivo. |
+| **Objetivos** | Usa o cronômetro para alertar sobre Vastilarvas, Arauto (14:30/15:00) e Barão (19:00/20:00). O full clear usa o melhor tempo registrado para o jungler inimigo na patch mais recente da planilha de clears. São previsões, não confirmações de conclusão de acampamentos ou surgimento real do objetivo. |
 | **Calendário ranqueado** | Importa partidas solo ranqueadas automaticamente e reúne resultados e snapshots de elo/PDL. |
 | **Voz local** | Faber e Jeff originais do Piper pt-BR, Alba e Azelma do Pocket TTS em português ou vozes instaladas no Windows. Os modelos são baixados na primeira prévia e depois ficam em cache local. A síntese e o texto dos alertas permanecem no dispositivo. |
 
