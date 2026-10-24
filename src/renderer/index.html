@@ -54,6 +54,14 @@
             </svg>
             <span>Jungler Tracker</span>
           </button>
+          <button class="sidebar-link" type="button" data-page-target="flash">
+            <svg aria-hidden="true" viewBox="0 0 20 20">
+              <circle cx="10" cy="11" r="6.5" />
+              <path d="M10 7.5V11l2.4 1.6M7.5 2.5h5M10 2.5V4" />
+              <path d="m14.7 6.3 1.2-1.2" />
+            </svg>
+            <span>Flash Timing</span>
+          </button>
           <button class="sidebar-link" type="button" data-page-target="calendar">
             <svg aria-hidden="true" viewBox="0 0 20 20">
               <circle cx="10" cy="10" r="7" />
@@ -76,13 +84,6 @@
               <path d="M10 2.5 16 5v4.5c0 4-2.7 6.7-6 8-3.3-1.3-6-4-6-8V5zM7.5 9.5a2.5 2.5 0 1 1 5 0c0 2-2.5 4-2.5 4s-2.5-2-2.5-4Z" />
             </svg>
             <span class="sidebar-feature-label">Wireless Champion Select<small>EM BREVE</small></span>
-          </button>
-          <button class="sidebar-link sidebar-feature-link" type="button" disabled aria-label="Spells Timing, em breve">
-            <svg aria-hidden="true" viewBox="0 0 20 20">
-              <circle cx="10" cy="10" r="7" />
-              <path d="M10 5.5V10l3 2" />
-            </svg>
-            <span class="sidebar-feature-label">Spells Timing<small>EM BREVE</small></span>
           </button>
           <button class="sidebar-link sidebar-feature-link" type="button" disabled aria-label="Sugestão de Pick, em breve">
             <svg aria-hidden="true" viewBox="0 0 20 20">
@@ -202,7 +203,7 @@
               <span class="home-feature-icon" aria-hidden="true">✦</span>
               <span class="home-feature-copy">
                 <strong>Próximas funcionalidades</strong>
-                <small>Champion Select · Spells Timing · Sugestões</small>
+                <small>Champion Select · Sugestões</small>
               </span>
               <span class="home-feature-soon">EM BREVE</span>
             </div>
@@ -266,7 +267,6 @@
             <button id="stop-button" class="secondary-button" type="button" disabled>Encerrar</button>
           </div>
         </section>
-
         <div class="dashboard-grid">
           <section class="dashboard-card jungler-card" id="jungler-card" aria-live="polite">
             <div class="card-heading">
@@ -385,6 +385,34 @@
           </section>
         </section>
         </div>
+        <section id="flash-page" class="app-page" aria-labelledby="spell-timing-title" hidden>
+          <section class="match-toolbar" aria-label="Flash Timing">
+            <div>
+              <span class="eyebrow">FLASH TIMING</span>
+              <p>Os timers são reconhecidos pelo chat da partida e funcionam para qualquer campeão inimigo.</p>
+            </div>
+          </section>
+          <p id="spell-timing-status" class="capture-status" role="status">
+            Inicie a captura na aba Jungler Tracker e marque o Flash de qualquer campeão inimigo.
+          </p>
+          <section class="dashboard-card spell-timing-card" aria-labelledby="spell-timing-title">
+            <div class="card-heading">
+              <div>
+                <span class="eyebrow">FLASH TIMING · INDEPENDENTE DO TRACKER</span>
+                <h2 id="spell-timing-title">Flash dos campeões inimigos</h2>
+              </div>
+            </div>
+            <p class="spell-timing-description">
+              Marque o Flash de qualquer campeão inimigo no placar. O timer é identificado pelo campeão da mensagem, não apenas pelo jungler.
+            </p>
+            <div class="spell-timing-heading">
+              <span id="spell-timing-empty" class="spell-timing-empty">
+                Nenhum Flash marcado. A recarga fixa é de 5:00.
+              </span>
+            </div>
+            <div id="spell-timing-list" class="spell-timing-list" aria-live="polite" hidden></div>
+          </section>
+        </section>
         <section id="calendar-page" class="calendar-page" aria-labelledby="calendar-heading" hidden>
           <section class="calendar-profile-card" aria-label="Perfil Riot ID e elo">
             <div class="calendar-profile-summary">

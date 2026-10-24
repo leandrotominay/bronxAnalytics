@@ -294,8 +294,18 @@ body.window-maximized .window-control .restore-icon {
   border-color: rgb(255 193 132 / 8%);
   background: rgb(255 255 255 / 2%);
   color: #b6aca1;
-  cursor: not-allowed;
   text-align: left;
+}
+
+.sidebar-feature-link:not(:disabled) {
+  color: #e3c4a5;
+  cursor: pointer;
+}
+
+.sidebar-feature-link:not(:disabled):hover {
+  border-color: rgb(255 193 132 / 22%);
+  background: rgb(255 255 255 / 5%);
+  color: #fff;
 }
 
 .sidebar-feature-link svg {
@@ -2240,6 +2250,80 @@ button.home-feature-card:hover {
   transform: translateY(-2px);
 }
 
+.spell-timing-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.spell-timing-card {
+  margin-top: 18px;
+}
+
+.spell-timing-heading {
+  display: grid;
+  gap: 6px;
+  margin-top: 14px;
+}
+
+.spell-timing-empty {
+  color: #a99e92;
+  font-size: 12px;
+}
+
+.spell-timing-list[hidden] {
+  display: none;
+}
+
+.spell-timing-entry {
+  display: grid;
+  grid-template-columns: 42px 30px minmax(0, 1fr);
+  align-items: center;
+  gap: 9px;
+  padding: 10px 12px;
+  border: 1px solid rgb(244 161 88 / 28%);
+  border-radius: 10px;
+  background: linear-gradient(110deg, rgb(12 11 13 / 84%), rgb(20 18 17 / 72%));
+}
+
+.spell-timing-entry-champion {
+  width: 42px;
+  height: 42px;
+  border: 1px solid rgb(244 161 88 / 46%);
+  border-radius: 7px;
+  object-fit: cover;
+}
+
+.spell-timing-entry-flash {
+  width: 30px;
+  height: 30px;
+  border-radius: 5px;
+  object-fit: cover;
+}
+
+.spell-timing-entry-details {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.spell-timing-entry-details strong {
+  overflow: hidden;
+  color: #f7eee5;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.spell-timing-entry-countdown {
+  color: #f4a65d;
+  font-size: 19px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  line-height: 1;
+}
+
 .timeline-alerts {
   position: relative;
   overflow: hidden;
@@ -2302,10 +2386,6 @@ button.home-feature-card:hover {
   font-size: 17px;
   font-weight: 800;
   letter-spacing: 0.025em;
-}
-
-.timeline-alert-time-secondary {
-  margin-top: 15px;
 }
 
 .timeline-alert-time i {

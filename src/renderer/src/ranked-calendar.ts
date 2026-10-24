@@ -407,6 +407,7 @@ export function initializeRankedCalendar(): void {
   const yasuoHeroArtwork = requireElement<HTMLImageElement>('#yasuo-hero-artwork')
   const homePage = requireElement<HTMLElement>('#home-page')
   const matchPage = requireElement<HTMLElement>('#match-page')
+  const flashPage = requireElement<HTMLElement>('#flash-page')
   const calendarPage = requireElement<HTMLElement>('#calendar-page')
   const voicePage = requireElement<HTMLElement>('#voice-page')
   const navigation = requireElement<HTMLElement>('.sidebar-navigation')
@@ -1238,6 +1239,7 @@ export function initializeRankedCalendar(): void {
     if (
       selectedPage !== 'home' &&
       selectedPage !== 'match' &&
+      selectedPage !== 'flash' &&
       selectedPage !== 'calendar' &&
       selectedPage !== 'voice'
     ) return
@@ -1245,15 +1247,18 @@ export function initializeRankedCalendar(): void {
     const showCalendar = selectedPage === 'calendar'
     homePage.hidden = !showHome
     matchPage.hidden = selectedPage !== 'match'
+    flashPage.hidden = selectedPage !== 'flash'
     calendarPage.hidden = !showCalendar
     voicePage.hidden = selectedPage !== 'voice'
     pageTitle.textContent = showHome
       ? 'Bem-vindo ao Bronx I.A'
       : showCalendar
         ? 'Perfil'
-        : selectedPage === 'voice'
-          ? 'Voz dos alertas'
-          : 'Jungler Tracker'
+        : selectedPage === 'flash'
+          ? 'Flash Timing'
+          : selectedPage === 'voice'
+            ? 'Voz dos alertas'
+            : 'Jungler Tracker'
     const workspace = document.querySelector('.workspace')
     if (workspace) {
         workspace.classList.remove('page-flare')

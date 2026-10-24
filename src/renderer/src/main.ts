@@ -7,7 +7,9 @@ import ortWasmModuleUrl from '../../../node_modules/onnxruntime-web/dist/ort-was
 import type { LiveClientJunglerResult } from '../../shared/live-client-data'
 import type { ChampionFullClear } from '../../shared/full-clear'
 import type { OverlayMarker } from '../../shared/overlay'
+import type { SpellTimingMarker } from '../../shared/spell-timing'
 import type { RiotSyncRequest, RiotSyncResponse } from '../../shared/riot-sync'
+import flashIconUrl from '../assets/SummonerFlash.png'
 import {
   classifyJungleZone,
   formatJungleZone,
@@ -15,6 +17,7 @@ import {
   type MapSide
 } from './jungle-zones'
 import { initializeRankedCalendar } from './ranked-calendar'
+import { findFlashChatMentions } from './spell-timing'
 
 export {}
 
@@ -27,10 +30,14 @@ declare global {
       closeWindow: () => Promise<void>
       setOverlayActive: (active: boolean) => Promise<void>
       setOverlayMarker: (marker: OverlayMarker | null) => Promise<void>
+      setOverlaySpellTimers: (markers: SpellTimingMarker[]) => Promise<void>
       publishOverlayAlert: (title: string) => void
       notifyOverlayReady: () => void
       onOverlayMarker: (callback: (marker: OverlayMarker | null) => void) => () => void
       onOverlayAlert: (callback: (title: string) => void) => () => void
+      onOverlaySpellTimers: (
+        callback: (markers: SpellTimingMarker[]) => void
+      ) => () => void
       findLeagueWindows: () => Promise<Array<{ id: string; name: string }>>
       selectLeagueWindow: (sourceId: string) => Promise<boolean>
       readLiveClientJungler: () => Promise<LiveClientJunglerResult>
@@ -38,6 +45,7 @@ declare global {
       syncRiotRankedMatches: (request: RiotSyncRequest) => Promise<RiotSyncResponse>
       initializeGameOcr: () => Promise<boolean>
       readGameClock: (image: Uint8Array) => Promise<{ text: string; confidence: number }>
+      readGameChat: (image: Uint8Array) => Promise<{ text: string; confidence: number }>
       saveDiagnosticSample: (sample: {
         manifest: string
         images: Record<string, string>
@@ -60,6 +68,9 @@ const junglerCard = document.querySelector<HTMLElement>('#jungler-card')
 const junglerPortraitImage = document.querySelector<HTMLImageElement>('#jungler-portrait')
 const junglerLocationText = document.querySelector<HTMLElement>('#jungler-location')
 const junglerStatus = document.querySelector<HTMLElement>('#jungler-status')
+const spellTimingStatus = document.querySelector<HTMLElement>('#spell-timing-status')
+const spellTimingList = document.querySelector<HTMLElement>('#spell-timing-list')
+const spellTimingEmpty = document.querySelector<HTMLElement>('#spell-timing-empty')
 const fullClearTime = document.querySelector<HTMLElement>('#full-clear-time')
 const fullClearStatus = document.querySelector<HTMLElement>('#full-clear-status')
 const minimapCalibrationDialog = document.querySelector<HTMLDialogElement>(
@@ -105,6 +116,9 @@ if (
   !junglerPortraitImage ||
   !junglerLocationText ||
   !junglerStatus ||
+  !spellTimingStatus ||
+  !spellTimingList ||
+  !spellTimingEmpty ||
   !fullClearTime ||
   !fullClearStatus ||
   !minimapCalibrationDialog ||
@@ -140,6 +154,9 @@ const jungleCard = junglerCard
 const junglePortrait = junglerPortraitImage
 const jungleLocation = junglerLocationText
 const junglerStatusElement = junglerStatus
+const spellTimingStatusElement = spellTimingStatus
+const spellTimingListElement = spellTimingList
+const spellTimingEmptyElement = spellTimingEmpty
 const fullClearTimeElement = fullClearTime
 const fullClearStatusElement = fullClearStatus
 const calibrationCanvas = calibrationPreview
@@ -208,6 +225,12 @@ clockCanvas.height = 240
 const clockContext = clockCanvas.getContext('2d', { willReadFrequently: true })
 if (!clockContext) throw new Error('Could not initialize the game clock analysis canvas.')
 const clockOcrContext = clockContext
+const chatCanvas = document.createElement('canvas')
+chatCanvas.width = 768
+chatCanvas.height = 384
+const chatContext = chatCanvas.getContext('2d', { willReadFrequently: true })
+if (!chatContext) throw new Error('Could not initialize the game chat analysis canvas.')
+const chatOcrContext = chatContext
 const portraitCanvas = document.createElement('canvas')
 portraitCanvas.width = 48
 portraitCanvas.height = 48
@@ -304,6 +327,8 @@ const jungleMatchPositionTolerance = 0.03
 const jungleZoneChangeConfirmationMs = 1_250
 const jungleZoneAnnouncementCooldownMs = 5_000
 const liveClientPollInterval = 1000
+const gameChatReadInterval = 5000
+const gameClockReadInterval = 2000
 const voidGrubAlertTime = 7 * 60
 const voidGrubSpawnTime = 8 * 60
 const heraldReminderTime = 14 * 60 + 30
@@ -327,8 +352,13 @@ let selectedWindowId: string | null = null
 let discoveryTimer: number | null = null
 let discoveryInProgress = false
 let clockTimer: number | null = null
-let clockReadInProgress = false
 let clockReaderReady = false
+let chatTimer: number | null = null
+let ocrReadInProgress = false
+let chatBaselineInitialized = false
+let chatMessageCounts = new Map<string, { count: number; lastSeenAt: number }>()
+let pendingFlashMentions: ChampionDefinition[] = []
+let activeFlashTimers = new Map<string, { champion: ChampionDefinition; expiresAt: number }>()
 let rosterRefreshTimer: number | null = null
 let rosterRefreshInProgress = false
 let announcedMatchTimeAlerts = new Set<string>()
@@ -1161,6 +1191,13 @@ function resetMatchEvents(): void {
   stableClockSamples = 0
   lastClockSampleAt = 0
   lastClockReadings = []
+  chatBaselineInitialized = false
+  chatMessageCounts = new Map()
+  pendingFlashMentions = []
+  activeFlashTimers = new Map()
+  spellTimingStatusElement.textContent =
+    'Inicie a captura e marque o Flash de qualquer campeão inimigo.'
+  void updateSpellTimingOverlay(0)
   junglePortraitTemplate = null
   lastJungleScanAt = 0
   pendingJungleZone = null
@@ -1963,11 +2000,11 @@ async function readGameClock(): Promise<void> {
   if (
     !video ||
     !clockReaderReady ||
-    clockReadInProgress ||
+    ocrReadInProgress ||
     video.videoWidth === 0 ||
     video.videoHeight === 0
   ) return
-  clockReadInProgress = true
+  ocrReadInProgress = true
   try {
     const clockRegions = [
       { left: 0.955, width: 0.043, top: 0, height: 0.032, name: 'HUD superior direito' },
@@ -2064,11 +2101,184 @@ async function readGameClock(): Promise<void> {
     if (stableClockSamples < 2) return
 
     processMatchTimeAlerts(seconds)
+    applyPendingFlashMentions(seconds)
+    void updateSpellTimingOverlay(seconds)
   } catch (error) {
     console.error('Could not read the League of Legends game clock.', error)
     setStatus('A detecção está ativa, mas não foi possível ler o relógio da partida.')
   } finally {
-    clockReadInProgress = false
+    ocrReadInProgress = false
+  }
+}
+
+function recordFlashChatMentions(text: string): void {
+  const mentions = findFlashChatMentions(
+    text,
+    championCatalog.champions as ChampionDefinition[]
+  )
+  const currentCounts = new Map<string, { count: number; champion: ChampionDefinition }>()
+  for (const mention of mentions) {
+    const current = currentCounts.get(mention.messageKey)
+    currentCounts.set(mention.messageKey, {
+      count: (current?.count ?? 0) + 1,
+      champion: mention.champion
+    })
+  }
+
+  const now = Date.now()
+  if (!chatBaselineInitialized) {
+    for (const [messageKey, mention] of currentCounts) {
+      chatMessageCounts.set(messageKey, { count: mention.count, lastSeenAt: now })
+    }
+    chatBaselineInitialized = true
+    spellTimingStatusElement.textContent =
+      'Monitorando marcações de Flash de qualquer campeão inimigo.'
+    return
+  }
+
+  for (const [messageKey, mention] of currentCounts) {
+    const previous = chatMessageCounts.get(messageKey)
+    const previousCount =
+      previous && now - previous.lastSeenAt <= 10_000 ? previous.count : 0
+    for (let index = previousCount; index < mention.count; index += 1) {
+      pendingFlashMentions.push(mention.champion)
+    }
+    chatMessageCounts.set(messageKey, {
+      count: Math.max(previousCount, mention.count),
+      lastSeenAt: now
+    })
+  }
+  for (const [messageKey, previous] of chatMessageCounts) {
+    if (now - previous.lastSeenAt > 12_000) chatMessageCounts.delete(messageKey)
+  }
+  if (lastRecognizedClock !== null) applyPendingFlashMentions(lastRecognizedClock)
+}
+
+function applyPendingFlashMentions(gameTimeSeconds: number): void {
+  if (pendingFlashMentions.length === 0) return
+  for (const champion of pendingFlashMentions) {
+    activeFlashTimers.set(champion.id, {
+      champion,
+      expiresAt: gameTimeSeconds + 300
+    })
+    spellTimingStatusElement.textContent =
+      `Flash de ${champion.name} marcado; recarga em 5:00.`
+  }
+  pendingFlashMentions = []
+  void updateSpellTimingOverlay(gameTimeSeconds)
+}
+
+function renderSpellTimingList(markers: SpellTimingMarker[]): void {
+  spellTimingListElement.replaceChildren()
+  spellTimingListElement.hidden = markers.length === 0
+  spellTimingEmptyElement.hidden = markers.length > 0
+  for (const marker of markers) {
+    const item = document.createElement('article')
+    item.className = 'spell-timing-entry'
+    const championIcon = document.createElement('img')
+    championIcon.className = 'spell-timing-entry-champion'
+    championIcon.src = marker.championIconUrl
+    championIcon.alt = marker.championName
+    const flashIcon = document.createElement('img')
+    flashIcon.className = 'spell-timing-entry-flash'
+    flashIcon.src = marker.flashIconUrl
+    flashIcon.alt = 'Flash'
+    const details = document.createElement('div')
+    details.className = 'spell-timing-entry-details'
+    const championName = document.createElement('strong')
+    championName.textContent = marker.championName
+    const remaining = document.createElement('span')
+    remaining.className = 'spell-timing-entry-countdown'
+    remaining.textContent =
+      `${Math.floor(marker.remainingSeconds / 60)}:${String(marker.remainingSeconds % 60).padStart(2, '0')}`
+    details.append(championName, remaining)
+    item.append(championIcon, flashIcon, details)
+    spellTimingListElement.append(item)
+  }
+}
+
+async function updateSpellTimingOverlay(gameTimeSeconds: number): Promise<void> {
+  const markers: SpellTimingMarker[] = []
+  for (const [championId, timer] of activeFlashTimers) {
+    const remainingSeconds = Math.ceil(timer.expiresAt - gameTimeSeconds)
+    if (remainingSeconds <= 0) {
+      activeFlashTimers.delete(championId)
+      continue
+    }
+    const championIconUrl =
+      championImageUrls[`../assets/champions/${timer.champion.id}.png`]
+    if (!championIconUrl) {
+      console.error(`No champion icon is available for flash timer ${championId}.`)
+      continue
+    }
+    markers.push({
+      championName: timer.champion.name,
+      championIconUrl: new URL(championIconUrl, window.location.href).href,
+      flashIconUrl: new URL(flashIconUrl, window.location.href).href,
+      remainingSeconds: Math.min(300, remainingSeconds)
+    })
+  }
+  renderSpellTimingList(markers)
+  try {
+    await window.companion.setOverlaySpellTimers(markers)
+  } catch (error) {
+    console.error('Could not update the enemy spell timers overlay.', error)
+    spellTimingStatusElement.textContent =
+      'Não foi possível atualizar os marcadores de feitiço no overlay.'
+  }
+}
+
+async function readGameChat(): Promise<void> {
+  if (
+    !video ||
+    !clockReaderReady ||
+    ocrReadInProgress ||
+    video.videoWidth === 0 ||
+    video.videoHeight === 0
+  ) return
+  const requestedVideo = video
+  ocrReadInProgress = true
+  try {
+    const left = Math.floor(video.videoWidth * 0.01)
+    const top = Math.floor(video.videoHeight * 0.50)
+    const width = Math.floor(video.videoWidth * 0.36)
+    const height = Math.floor(video.videoHeight * 0.34)
+    chatOcrContext.imageSmoothingEnabled = true
+    chatOcrContext.imageSmoothingQuality = 'high'
+    chatOcrContext.fillStyle = '#000'
+    chatOcrContext.fillRect(0, 0, chatCanvas.width, chatCanvas.height)
+    chatOcrContext.drawImage(
+      video,
+      left,
+      top,
+      width,
+      height,
+      0,
+      0,
+      chatCanvas.width,
+      chatCanvas.height
+    )
+    const pixels = chatOcrContext.getImageData(0, 0, chatCanvas.width, chatCanvas.height)
+    for (let index = 0; index < pixels.data.length; index += 4) {
+      const luminance =
+        pixels.data[index] * 0.299 +
+        pixels.data[index + 1] * 0.587 +
+        pixels.data[index + 2] * 0.114
+      const value = luminance > 85 ? 255 : 0
+      pixels.data[index] = value
+      pixels.data[index + 1] = value
+      pixels.data[index + 2] = value
+    }
+    chatOcrContext.putImageData(pixels, 0, 0)
+    const result = await window.companion.readGameChat(await canvasToBytes(chatCanvas))
+    if (video !== requestedVideo) return
+    recordFlashChatMentions(result.text.trim())
+  } catch (error) {
+    console.error('Could not read enemy spell marks from the game chat.', error)
+    spellTimingStatusElement.textContent =
+      'Não foi possível ler o chat para detectar marcações de Flash.'
+  } finally {
+    ocrReadInProgress = false
   }
 }
 
@@ -2300,6 +2510,10 @@ function stopCapture(): void {
     window.clearInterval(rosterRefreshTimer)
     rosterRefreshTimer = null
   }
+  if (chatTimer !== null) {
+    window.clearInterval(chatTimer)
+    chatTimer = null
+  }
   const activeStream = stream
   stream = null
   if (activeStream) {
@@ -2428,11 +2642,15 @@ startCaptureButton.addEventListener('click', async () => {
       await window.companion.initializeGameOcr()
       if (!stream) return
       clockReaderReady = true
-      setStatus('Lendo o cronômetro do jogo para avisos de objetivos.')
+      setStatus('Lendo o cronômetro e o chat para alertas da partida.')
       clockTimer = window.setInterval(() => {
         void readGameClock()
-      }, 750)
+      }, gameClockReadInterval)
       void readGameClock()
+      chatTimer = window.setInterval(() => {
+        void readGameChat()
+      }, gameChatReadInterval)
+      void readGameChat()
     } catch (error) {
       console.error('Could not initialize the local OCR engine.', error)
       setStatus('A detecção visual está ativa, mas a leitura do relógio está indisponível.')

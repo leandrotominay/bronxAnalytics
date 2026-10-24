@@ -22,6 +22,7 @@ import {
   type RiotSyncResponse
 } from '../shared/riot-sync'
 import type { OverlayMarker } from '../shared/overlay'
+import type { SpellTimingMarker } from '../shared/spell-timing'
 import { readLiveClientJungler } from './live-client-data'
 import { readChampionFullClear } from './full-clear'
 
@@ -42,6 +43,7 @@ let overlayActive = false
 let pendingOverlayAlert: string | null = null
 let pendingOverlayMarker: OverlayMarker | null = null
 let hasPendingOverlayMarker = false
+let latestSpellTimingMarkers: SpellTimingMarker[] = []
 let authorizedCaptureSource: DesktopCapturerSource | null = null
 let ocrWorker: Awaited<ReturnType<typeof createWorker>> | null = null
 let ocrWorkerPromise: Promise<Awaited<ReturnType<typeof createWorker>>> | null = null
@@ -83,6 +85,35 @@ function isOverlayMarker(value: unknown): value is OverlayMarker {
     marker.size > 0 &&
     marker.size <= 0.1
   )
+}
+
+function isSpellTimingMarkers(value: unknown): value is SpellTimingMarker[] {
+  if (!Array.isArray(value) || value.length > 20) return false
+  return value.every((entry) => {
+    if (typeof entry !== 'object' || entry === null) return false
+    const marker = entry as Record<string, unknown>
+    if (
+      typeof marker.championName !== 'string' ||
+      marker.championName.trim().length === 0 ||
+      marker.championName.length > 80 ||
+      typeof marker.remainingSeconds !== 'number' ||
+      !Number.isInteger(marker.remainingSeconds) ||
+      marker.remainingSeconds < 1 ||
+      marker.remainingSeconds > 300
+    ) return false
+    for (const iconUrl of [marker.championIconUrl, marker.flashIconUrl]) {
+      if (typeof iconUrl !== 'string' || iconUrl.length > 512) return false
+      try {
+        const protocol = new URL(iconUrl).protocol
+        if (protocol !== 'file:' && protocol !== 'http:' && protocol !== 'https:') {
+          return false
+        }
+      } catch {
+        return false
+      }
+    }
+    return true
+  })
 }
 
 function isRiotSyncRequest(value: unknown): value is RiotSyncRequest {
@@ -250,6 +281,7 @@ function createWindow(): void {
     pendingOverlayAlert = null
     pendingOverlayMarker = null
     hasPendingOverlayMarker = false
+    latestSpellTimingMarkers = []
   })
 }
 
@@ -346,6 +378,7 @@ app.whenReady().then(() => {
           pendingOverlayMarker = null
           hasPendingOverlayMarker = false
         }
+        overlayWindow.webContents.send('overlay:spell-timers', latestSpellTimingMarkers)
       }
     } else {
       overlayWindow.hide()
@@ -369,6 +402,7 @@ app.whenReady().then(() => {
       pendingOverlayMarker = null
       hasPendingOverlayMarker = false
     }
+    overlayWindow.webContents.send('overlay:spell-timers', latestSpellTimingMarkers)
   })
 
   ipcMain.handle('overlay:set-marker', (event, markerValue: unknown) => {
@@ -382,6 +416,17 @@ app.whenReady().then(() => {
       return
     }
     overlayWindow.webContents.send('overlay:marker', markerValue)
+  })
+
+  ipcMain.handle('overlay:set-spell-timers', (event, markerValue: unknown) => {
+    assertMainWindowSender(event.sender)
+    if (!isSpellTimingMarkers(markerValue)) {
+      throw new Error('Spell timing overlay data is invalid.')
+    }
+    latestSpellTimingMarkers = markerValue
+    if (overlayWindow && overlayReady && overlayActive) {
+      overlayWindow.webContents.send('overlay:spell-timers', latestSpellTimingMarkers)
+    }
   })
 
   ipcMain.on('overlay:publish-alert', (event, title: unknown) => {
@@ -506,6 +551,22 @@ app.whenReady().then(() => {
       await ocrWorker!.setParameters({
         tessedit_char_whitelist: '0123456789:',
         tessedit_pageseg_mode: PSM.SINGLE_BLOCK
+      })
+      const result = await ocrWorker!.recognize(Buffer.from(image))
+      return { text: result.data.text, confidence: result.data.confidence }
+    })
+  })
+
+  ipcMain.handle('game-ocr:read-chat', async (event, image: unknown) => {
+    assertMainWindowSender(event.sender)
+    if (!(image instanceof Uint8Array) || image.byteLength === 0 || image.byteLength > 1_000_000) {
+      throw new Error('Invalid game-chat image.')
+    }
+    if (!ocrWorker) throw new Error('The local OCR worker is not initialized.')
+    return enqueueOcr(async () => {
+      await ocrWorker!.setParameters({
+        tessedit_char_whitelist: '',
+        tessedit_pageseg_mode: PSM.SPARSE_TEXT
       })
       const result = await ocrWorker!.recognize(Buffer.from(image))
       return { text: result.data.text, confidence: result.data.confidence }

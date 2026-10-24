@@ -97,6 +97,66 @@ body {
   left: 21px;
 }
 
+.spell-timers {
+  position: fixed;
+  z-index: 1000;
+  top: 15vh;
+  left: 2vw;
+  display: grid;
+  width: min(220px, 20vw);
+  gap: 6px;
+  color: #fff8ef;
+  font-family: "Segoe UI Variable Display", "Aptos Display", "Segoe UI", sans-serif;
+}
+
+.spell-timer {
+  display: grid;
+  grid-template-columns: 32px 24px minmax(0, 1fr);
+  align-items: center;
+  gap: 7px;
+  padding: 6px 8px;
+  border: 1px solid rgb(244 161 88 / 34%);
+  border-radius: 8px;
+  background: linear-gradient(110deg, rgb(12 11 13 / 92%), rgb(20 18 17 / 88%));
+  box-shadow: 0 6px 18px rgb(0 0 0 / 40%);
+}
+
+.spell-timer-champion {
+  width: 32px;
+  height: 32px;
+  border: 1px solid rgb(244 161 88 / 55%);
+  border-radius: 5px;
+  object-fit: cover;
+}
+
+.spell-timer-flash {
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  object-fit: cover;
+}
+
+.spell-timer-details {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.spell-timer-details strong {
+  overflow: hidden;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.spell-timer-countdown {
+  color: #f4a65d;
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  line-height: 1;
+}
+
 @media (max-width: 900px) {
   .overlay-alert {
     max-width: min(480px, 65vw);

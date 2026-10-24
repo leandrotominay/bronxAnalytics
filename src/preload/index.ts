@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron'
 import type { LiveClientJunglerResult } from '../shared/live-client-data'
 import type { ChampionFullClear } from '../shared/full-clear'
 import type { OverlayMarker } from '../shared/overlay'
+import type { SpellTimingMarker } from '../shared/spell-timing'
 import type { RiotSyncRequest, RiotSyncResponse } from '../shared/riot-sync'
 
 type LeagueWindow = {
@@ -19,6 +20,8 @@ contextBridge.exposeInMainWorld('companion', {
     ipcRenderer.invoke('overlay:set-active', active),
   setOverlayMarker: (marker: OverlayMarker | null): Promise<void> =>
     ipcRenderer.invoke('overlay:set-marker', marker),
+  setOverlaySpellTimers: (markers: SpellTimingMarker[]): Promise<void> =>
+    ipcRenderer.invoke('overlay:set-spell-timers', markers),
   publishOverlayAlert: (title: string): void =>
     ipcRenderer.send('overlay:publish-alert', title),
   notifyOverlayReady: (): void => ipcRenderer.send('overlay:ready'),
@@ -32,6 +35,16 @@ contextBridge.exposeInMainWorld('companion', {
     const listener = (_event: Electron.IpcRendererEvent, title: string): void => callback(title)
     ipcRenderer.on('overlay:alert', listener)
     return () => ipcRenderer.removeListener('overlay:alert', listener)
+  },
+  onOverlaySpellTimers: (
+    callback: (markers: SpellTimingMarker[]) => void
+  ): (() => void) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      markers: SpellTimingMarker[]
+    ): void => callback(markers)
+    ipcRenderer.on('overlay:spell-timers', listener)
+    return () => ipcRenderer.removeListener('overlay:spell-timers', listener)
   },
   findLeagueWindows: (): Promise<LeagueWindow[]> =>
     ipcRenderer.invoke('capture:list-league-windows'),
@@ -47,6 +60,8 @@ contextBridge.exposeInMainWorld('companion', {
     ipcRenderer.invoke('game-ocr:initialize'),
   readGameClock: (image: Uint8Array): Promise<{ text: string; confidence: number }> =>
     ipcRenderer.invoke('game-ocr:read-clock', image),
+  readGameChat: (image: Uint8Array): Promise<{ text: string; confidence: number }> =>
+    ipcRenderer.invoke('game-ocr:read-chat', image),
   saveDiagnosticSample: (sample: {
     manifest: string
     images: Record<string, string>
